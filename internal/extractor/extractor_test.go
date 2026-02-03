@@ -171,6 +171,109 @@ func TestExtract(t *testing.T) {
 	}
 }
 
+func TestExtractIMPSName(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "IMPS with OK status",
+			narration: "MMT/IMPS/518211116991/OK/ANURAG SHA/HDFC BANK",
+			want:      []string{"ANURAG SHA"},
+		},
+		{
+			name:      "IMPS with two names",
+			narration: "MMT/IMPS/527412932576/DURGA/AGNIHOTRIM/UNION BANKOF I",
+			want:      []string{"DURGA", "AGNIHOTRIM"},
+		},
+		{
+			name:      "Non-MMT IMPS format",
+			narration: "IMPS/450912345678/9876543210/Payment",
+			want:      nil,
+		},
+		{
+			name:      "Non-IMPS narration",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+		{
+			name:      "NEFT narration",
+			narration: "NEFT-CBINH25360482077-M S VISHNOI MEDICAL STORE-0000000364324",
+			want:      nil,
+		},
+		{
+			name:      "IMPS with secondary reference format",
+			narration: "MMT/IMPS/528819823026/50000078106642 /RAPIPAY FI/YES BANK LTD",
+			want:      []string{"RAPIPAY FI"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeIMPSName)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestExtractBankName(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "IMPS with OK status - HDFC",
+			narration: "MMT/IMPS/518211116991/OK/ANURAG SHA/HDFC BANK",
+			want:      []string{"HDFC BANK"},
+		},
+		{
+			name:      "IMPS with two names - Union Bank normalized",
+			narration: "MMT/IMPS/527412932576/DURGA/AGNIHOTRIM/UNION BANKOF I",
+			want:      []string{"UNION BANK OF INDIA"},
+		},
+		{
+			name:      "Non-MMT IMPS format",
+			narration: "IMPS/450912345678/9876543210/Payment",
+			want:      nil,
+		},
+		{
+			name:      "Non-IMPS narration",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+		{
+			name:      "IMPS with secondary reference format",
+			narration: "MMT/IMPS/528819823026/50000078106642 /RAPIPAY FI/YES BANK LTD",
+			want:      []string{"YES BANK"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeBankName)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestExtractIFSC(t *testing.T) {
 	tests := []struct {
 		name      string

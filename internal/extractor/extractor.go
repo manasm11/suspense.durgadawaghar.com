@@ -13,6 +13,8 @@ const (
 	TypePhone         IdentifierType = "phone"
 	TypeAccountNumber IdentifierType = "account_number"
 	TypeIFSC          IdentifierType = "ifsc"
+	TypeIMPSName      IdentifierType = "imps_name"  // Sender/receiver name from IMPS
+	TypeBankName      IdentifierType = "bank_name"  // Bank name from IMPS
 )
 
 // Identifier represents an extracted identifier from a narration
@@ -53,7 +55,138 @@ var (
 
 	// IFSC Code: 4 letters + 0 + 6 alphanumeric characters
 	ifscPattern = regexp.MustCompile(`[A-Z]{4}0[A-Z0-9]{6}`)
+
+	// IMPS patterns for extracting names and bank
+	// MMT/IMPS/<ref>/OK/<name>/<bank> - status OK format
+	impsOKPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/OK/([^/]+)/(.+)`)
+	// MMT/IMPS/<ref>/<name1>/<name2>/<bank> - two names format (name1 could be sender, name2 receiver or vice versa)
+	impsTwoNamesPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/([A-Z][A-Z\s]*)/([A-Z][A-Z\s]*)/(.+)`)
+	// MMT/IMPS/<ref>/<secondary_ref> /<name>/<bank> - secondary reference format with space before slash
+	impsSecondaryRefPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/\d+\s*/([^/]+)/(.+)`)
 )
+
+// bankNormalization maps truncated bank names to full names
+var bankNormalization = map[string]string{
+	"UNION BANKOF I":    "UNION BANK OF INDIA",
+	"STATE BANK O":      "STATE BANK OF INDIA",
+	"BANK OF BARO":      "BANK OF BARODA",
+	"PUNJAB NATIO":      "PUNJAB NATIONAL BANK",
+	"CANARA BANK":       "CANARA BANK",
+	"HDFC BANK":         "HDFC BANK",
+	"ICICI BANK":        "ICICI BANK",
+	"AXIS BANK":         "AXIS BANK",
+	"KOTAK MAHIND":      "KOTAK MAHINDRA BANK",
+	"INDUSIND BAN":      "INDUSIND BANK",
+	"YES BANK":          "YES BANK",
+	"IDBI BANK":         "IDBI BANK",
+	"CENTRAL BANK":      "CENTRAL BANK OF INDIA",
+	"INDIAN BANK":       "INDIAN BANK",
+	"INDIAN OVERS":      "INDIAN OVERSEAS BANK",
+	"UCO BANK":          "UCO BANK",
+	"BANK OF INDI":      "BANK OF INDIA",
+	"SYNDICATE BA":      "SYNDICATE BANK",
+	"ALLAHABAD BA":      "ALLAHABAD BANK",
+	"CORPORATION":       "CORPORATION BANK",
+	"ORIENTAL BAN":      "ORIENTAL BANK OF COMMERCE",
+	"UNITED BANK":       "UNITED BANK OF INDIA",
+	"DENA BANK":         "DENA BANK",
+	"VIJAYA BANK":       "VIJAYA BANK",
+	"FEDERAL BANK":      "FEDERAL BANK",
+	"SOUTH INDIAN":      "SOUTH INDIAN BANK",
+	"KARNATAKA BA":      "KARNATAKA BANK",
+	"BANDHAN BANK":      "BANDHAN BANK",
+	"RBL BANK":          "RBL BANK",
+	"IDFC FIRST B":      "IDFC FIRST BANK",
+	"AU SMALL FIN":      "AU SMALL FINANCE BANK",
+	"EQUITAS SMAL":      "EQUITAS SMALL FINANCE BANK",
+	"UJJIVAN SMAL":      "UJJIVAN SMALL FINANCE BANK",
+	"PAYTM PAYMEN":      "PAYTM PAYMENTS BANK",
+	"AIRTEL PAYME":      "AIRTEL PAYMENTS BANK",
+	"FINO PAYMENT":      "FINO PAYMENTS BANK",
+	"JIOPAYMENTSB":      "JIO PAYMENTS BANK",
+}
+
+// normalizeBank normalizes truncated bank names to full names
+func normalizeBank(raw string) string {
+	raw = strings.TrimSpace(raw)
+	// Try exact match first
+	if normalized, ok := bankNormalization[raw]; ok {
+		return normalized
+	}
+	// Try prefix match for even more truncated names
+	for truncated, full := range bankNormalization {
+		if strings.HasPrefix(truncated, raw) || strings.HasPrefix(raw, truncated) {
+			return full
+		}
+	}
+	return raw
+}
+
+// isValidIMPSName checks if the extracted name is valid (not a status code)
+func isValidIMPSName(name string) bool {
+	name = strings.TrimSpace(name)
+	if len(name) < 2 {
+		return false
+	}
+	// Reject status codes
+	statusCodes := []string{"OK", "NA", "NULL", "FAIL", "ERROR", "PENDING", "SUCCESS"}
+	for _, code := range statusCodes {
+		if name == code {
+			return false
+		}
+	}
+	// Names should contain at least one letter
+	hasLetter := false
+	for _, r := range name {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
+			hasLetter = true
+			break
+		}
+	}
+	return hasLetter
+}
+
+// extractIMPSData extracts names and bank from IMPS narrations
+func extractIMPSData(narration string) (names []string, bank string) {
+	upperNarration := strings.ToUpper(narration)
+
+	// Try MMT/IMPS/ref/OK/name/bank pattern first
+	if matches := impsOKPattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
+		name := strings.TrimSpace(matches[1])
+		if isValidIMPSName(name) {
+			names = append(names, name)
+		}
+		bank = normalizeBank(matches[2])
+		return
+	}
+
+	// Try MMT/IMPS/ref/name1/name2/bank pattern
+	if matches := impsTwoNamesPattern.FindStringSubmatch(upperNarration); len(matches) > 3 {
+		name1 := strings.TrimSpace(matches[1])
+		name2 := strings.TrimSpace(matches[2])
+		// Validate that these aren't status codes
+		if isValidIMPSName(name1) && name1 != "OK" {
+			names = append(names, name1)
+		}
+		if isValidIMPSName(name2) && name2 != "OK" {
+			names = append(names, name2)
+		}
+		bank = normalizeBank(matches[3])
+		return
+	}
+
+	// Try MMT/IMPS/ref/secondary_ref /<name>/<bank> pattern (secondary reference format)
+	if matches := impsSecondaryRefPattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
+		name := strings.TrimSpace(matches[1])
+		if isValidIMPSName(name) {
+			names = append(names, name)
+		}
+		bank = normalizeBank(matches[2])
+		return
+	}
+
+	return nil, ""
+}
 
 // Extract extracts all identifiers from a narration string
 func Extract(narration string) []Identifier {
@@ -200,6 +333,29 @@ func Extract(narration string) []Identifier {
 			identifiers = append(identifiers, Identifier{
 				Type:  TypeIFSC,
 				Value: value,
+			})
+		}
+	}
+
+	// Extract IMPS names and bank names
+	names, bank := extractIMPSData(narration)
+	for _, name := range names {
+		key := string(TypeIMPSName) + ":" + name
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeIMPSName,
+				Value: name,
+			})
+		}
+	}
+	if bank != "" {
+		key := string(TypeBankName) + ":" + bank
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeBankName,
+				Value: bank,
 			})
 		}
 	}
