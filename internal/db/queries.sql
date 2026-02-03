@@ -68,3 +68,10 @@ FROM parties p
 LEFT JOIN transactions t ON p.id = t.party_id
 GROUP BY p.id
 ORDER BY transaction_count DESC;
+
+-- name: FindPartiesByNarrationPattern :many
+SELECT DISTINCT p.*, t.narration as match_narration
+FROM parties p
+JOIN transactions t ON p.id = t.party_id
+WHERE t.narration LIKE ?
+LIMIT 50;

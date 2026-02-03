@@ -1,12 +1,13 @@
 package pages
 
 import (
+	"database/sql"
 	"fmt"
 	"suspense.durgadawaghar.com/internal/db/sqlc"
 	"suspense.durgadawaghar.com/internal/views"
 )
 
-templ PartyDetail(party sqlc.PartyWithStats, identifiers []sqlc.Identifier, transactions []sqlc.Transaction) {
+templ PartyDetail(party sqlc.GetPartyWithTransactionCountRow, identifiers []sqlc.Identifier, transactions []sqlc.Transaction) {
 	@views.Layout(party.Name) {
 		<h2>
 			{ party.Name }
@@ -18,7 +19,7 @@ templ PartyDetail(party sqlc.PartyWithStats, identifiers []sqlc.Identifier, tran
 		<div class="stats">
 			<p>
 				<strong>Total Transactions:</strong> { fmt.Sprintf("%d", party.TransactionCount) }<br/>
-				<strong>Total Amount:</strong> ₹{ fmt.Sprintf("%.2f", party.TotalAmount) }
+				<strong>Total Amount:</strong> ₹{ formatNullFloat(party.TotalAmount) }
 			</p>
 		</div>
 
@@ -70,7 +71,7 @@ templ PartyDetail(party sqlc.PartyWithStats, identifiers []sqlc.Identifier, tran
 	}
 }
 
-templ PartyList(parties []sqlc.PartyWithStats) {
+templ PartyList(parties []sqlc.GetAllPartiesWithStatsRow) {
 	@views.Layout("All Parties") {
 		<h2>All Parties</h2>
 		<p class="stats">{ fmt.Sprintf("%d", len(parties)) } parties in database</p>
@@ -99,7 +100,7 @@ templ PartyList(parties []sqlc.PartyWithStats) {
 								}
 							</td>
 							<td>{ fmt.Sprintf("%d", party.TransactionCount) }</td>
-							<td>₹{ fmt.Sprintf("%.2f", party.TotalAmount) }</td>
+							<td>₹{ formatAmount(party.TotalAmount) }</td>
 						</tr>
 					}
 				</tbody>
@@ -115,4 +116,22 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+func formatNullFloat(nf sql.NullFloat64) string {
+	if nf.Valid {
+		return fmt.Sprintf("%.2f", nf.Float64)
+	}
+	return "0.00"
+}
+
+func formatAmount(amount interface{}) string {
+	switch v := amount.(type) {
+	case float64:
+		return fmt.Sprintf("%.2f", v)
+	case int64:
+		return fmt.Sprintf("%.2f", float64(v))
+	default:
+		return "0.00"
+	}
 }

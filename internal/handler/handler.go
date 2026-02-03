@@ -153,7 +153,10 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 	// Try to find existing party by identifier
 	var partyID int64
 	for _, id := range ids {
-		existing, err := h.queries.GetIdentifierByTypeValue(ctx, string(id.Type), id.Value)
+		existing, err := h.queries.GetIdentifierByTypeValue(ctx, sqlc.GetIdentifierByTypeValueParams{
+			Type:  string(id.Type),
+			Value: id.Value,
+		})
 		if err == nil {
 			partyID = existing.PartyID
 			break
@@ -162,7 +165,10 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 
 	// If no existing party found, create new one
 	if partyID == 0 {
-		party, err := h.queries.CreateParty(ctx, tx.PartyName, sql.NullString{String: tx.Location, Valid: tx.Location != ""})
+		party, err := h.queries.CreateParty(ctx, sqlc.CreatePartyParams{
+			Name:     tx.PartyName,
+			Location: sql.NullString{String: tx.Location, Valid: tx.Location != ""},
+		})
 		if err != nil {
 			return fmt.Errorf("creating party: %w", err)
 		}
@@ -171,7 +177,11 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 
 	// Insert identifiers (upsert - will update party_id if exists)
 	for _, id := range ids {
-		_, err := h.queries.CreateIdentifier(ctx, partyID, string(id.Type), id.Value)
+		_, err := h.queries.CreateIdentifier(ctx, sqlc.CreateIdentifierParams{
+			PartyID: partyID,
+			Type:    string(id.Type),
+			Value:   id.Value,
+		})
 		if err != nil {
 			// Log but don't fail on identifier insert errors
 			continue
@@ -179,14 +189,13 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 	}
 
 	// Insert transaction
-	_, err := h.queries.CreateTransaction(
-		ctx,
-		partyID,
-		tx.Amount,
-		tx.Date.Format("2006-01-02"),
-		sql.NullString{String: tx.PaymentMode, Valid: tx.PaymentMode != ""},
-		sql.NullString{String: tx.Narration, Valid: tx.Narration != ""},
-	)
+	_, err := h.queries.CreateTransaction(ctx, sqlc.CreateTransactionParams{
+		PartyID:         partyID,
+		Amount:          tx.Amount,
+		TransactionDate: tx.Date,
+		PaymentMode:     sql.NullString{String: tx.PaymentMode, Valid: tx.PaymentMode != ""},
+		Narration:       sql.NullString{String: tx.Narration, Valid: tx.Narration != ""},
+	})
 	if err != nil {
 		return fmt.Errorf("creating transaction: %w", err)
 	}
