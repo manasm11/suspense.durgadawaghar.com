@@ -7,18 +7,19 @@ templ Home() {
 		<h2>Search by Bank Narration</h2>
 		<p>Paste a bank statement narration to find matching parties from your receipt book data.</p>
 
-		<form hx-post="/search" hx-target="#results" hx-indicator="#loading">
+		<form>
 			<label for="narration">Bank Narration</label>
-			<textarea
+			<input
+				type="text"
 				id="narration"
 				name="narration"
-				placeholder="Paste bank narration here, e.g.:&#10;UPI/SANDHYA ME/9450852076@YBL/PAYMENT FR/STATE BANK/450854353978&#10;&#10;or&#10;&#10;NEFT-CBINH25360482077-M S VISHNOI MEDICAL STORE-//ATTN/VISHNOI-0000000364324"
-				rows="4"
-			></textarea>
-			<button type="submit">
-				Search
-				<span id="loading" class="htmx-indicator"> Searching...</span>
-			</button>
+				placeholder="Paste bank narration here..."
+				hx-post="/search"
+				hx-target="#results"
+				hx-trigger="input changed delay:300ms, paste changed delay:100ms"
+				hx-indicator="#loading"
+			/>
+			<span id="loading" class="htmx-indicator">Searching...</span>
 		</form>
 
 		<div id="results"></div>
@@ -27,17 +28,17 @@ templ Home() {
 		<p>Click any example to try it:</p>
 		<ul>
 			<li>
-				<a href="#" onclick="document.getElementById('narration').value='UPI/SANDHYA ME/9450852076@YBL/PAYMENT FR/STATE BANK/450854353978'; return false;">
+				<a href="#" onclick="var el = document.getElementById('narration'); el.value='UPI/SANDHYA ME/9450852076@YBL/PAYMENT FR/STATE BANK/450854353978'; htmx.trigger(el, 'input'); return false;">
 					UPI transaction with VPA
 				</a>
 			</li>
 			<li>
-				<a href="#" onclick="document.getElementById('narration').value='NEFT-CBINH25360482077-M S VISHNOI MEDICAL STORE-//ATTN/VISHNOI-0000000364324'; return false;">
+				<a href="#" onclick="var el = document.getElementById('narration'); el.value='NEFT-CBINH25360482077-M S VISHNOI MEDICAL STORE-//ATTN/VISHNOI-0000000364324'; htmx.trigger(el, 'input'); return false;">
 					NEFT with account number
 				</a>
 			</li>
 			<li>
-				<a href="#" onclick="document.getElementById('narration').value='IMPS/450912345678/9876543210/Payment'; return false;">
+				<a href="#" onclick="var el = document.getElementById('narration'); el.value='IMPS/450912345678/9876543210/Payment'; htmx.trigger(el, 'input'); return false;">
 					IMPS with phone number
 				</a>
 			</li>
