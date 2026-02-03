@@ -30,6 +30,11 @@ func TestExtractUPIVPA(t *testing.T) {
 			narration: "NEFT transfer 12345",
 			want:      nil,
 		},
+		{
+			name:      "UPI ID from narration format (no @ symbol)",
+			narration: "UPI/564031341768/UPI/ANUJ19SENGARR-3/KOTAK MAHINDRA /AXI0E9F3406C3D74904A45A",
+			want:      []string{"ANUJ19SENGARR-3"},
+		},
 	}
 
 	for _, tt := range tests {
