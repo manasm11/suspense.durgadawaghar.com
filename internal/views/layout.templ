@@ -10,6 +10,7 @@ templ Layout(title string) {
 			<link rel="stylesheet" href="/static/simple.min.css"/>
 			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
 			<style>
+				body { max-width: 1200px; }
 				.confidence-high { color: #2e7d32; font-weight: bold; }
 				.confidence-medium { color: #f57c00; font-weight: bold; }
 				.confidence-low { color: #c62828; font-weight: bold; }
@@ -46,6 +47,10 @@ templ Layout(title string) {
 				.error { color: #c62828; padding: 1em; background: #ffebee; border-radius: 4px; }
 				.success { color: #2e7d32; padding: 1em; background: #e8f5e9; border-radius: 4px; }
 				.location { color: #666; font-size: 0.9em; }
+				#narration {
+					width: 100%;
+					max-width: 800px;
+				}
 			</style>
 		</head>
 		<body>
