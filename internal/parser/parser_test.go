@@ -866,6 +866,318 @@ SUB TOTAL 226071.00 226071.00
 	}
 }
 
+func TestParseOctober2025ReceiptBook(t *testing.T) {
+	// Test with actual October 2025 receipt book data
+	input := `DURGA DAWA GHAR (PARTNER)
+60/33,PURANI DAL MANDI KANPUR
+E-Mail : durgadawaghar2022@gmail.com
+D.L.No. : UP7820B001680,UP7821B001673
+GSTIN : 09AATFD8891P1Z2
+RECEIPT BOOK
+01-10-2025 - 31-10-2025 Page No..1
+------------------------------------------------------------------------------
+DATE PARTICULARS DEBIT CREDIT
+------------------------------------------------------------------------------
+Oct 1 SAHU MEDICAL CENTRE ASHOTHAR 125213.00
+ICICI 192105002017 125213.00
+Chq.000036 Dt. 01-10-2025 Ag. ,DDG00236,DDG011513,DDG012404,DDG014811,DDG016544,DDG016570,DDG00251,
+,DDG
+----------------------------------
+125213.00 125213.00
+==================================
+Oct 1 PASHU AUSHADI MEDICAL STORE GHATAMPUR 75000.00
+ICICI 192105002017 75000.00
+Chq.000041 Dt. 01-10-2025 Ag. DDG014597,DDG014945,DDG015378,DDG015425,DDG015855
+----------------------------------
+75000.00 75000.00
+==================================
+Oct 1 PAYTM BUSINESS 25310.00
+ICICI 192105002017 25310.00
+NEFT-YESBN12025100101810778-ONE 97 COMMUNICATIONSLIMITED SETTL-AWSPG20250930
+----------------------------------
+25310.00 25310.00
+==================================
+Oct 6 SUSPENSE A/C 427.00
+ICICI 192105002017 427.00
+UPI/587118528621/PAYMENT FROM PH/8960351518@YBL/STATE BANK OF I/YBLC6A44D576
+----------------------------------
+427.00 427.00
+==================================
+Oct 13 MAA VAISHNO MED & GEN STORE KANPUR(NAGAR 75901.00
+ICICI 192105002017 75901.00
+TRF/MAA VAISHNO MEDICAL AND/001146/ICI/13.10.2025
+----------------------------------
+75901.00 75901.00
+==================================
+Oct 18 LAXMI MEDICAL STORE MUNSI GANJ 144.00
+ICICI 192105002017 144.00
+65172.00 65172.00
+==================================
+Oct 24 SUSPENSE A/C 7000.00
+ICICI 192105002017 7000.00
+UPI/391925883994/PAYMENT FROM PH/8858510560@AXL/STATE BANK OF I/AXL91592F9E9
+----------------------------------
+7000.00 7000.00
+==================================
+Oct 31 BANK CHARGES HDFC 1000000.00
+ICICI 192105002017 1000000.00
+RTGS-HDFCR52025103178522559-DURGA DAWA GHAR-99998542266666 -HDFC0000240
+----------------------------------
+1000000.00 1000000.00
+==================================
+------------------------------------------------------------------------------
+SUB TOTAL 1301990.00 1301990.00
+------------------------------------------------------------------------------
+Continued..2`
+
+	transactions := Parse(input, 2025)
+
+	// Expected transactions (SUSPENSE A/C should be skipped):
+	// 1. SAHU MEDICAL CENTRE ASHOTHAR
+	// 2. PASHU AUSHADI MEDICAL STORE GHATAMPUR
+	// 3. PAYTM BUSINESS
+	// 4. MAA VAISHNO MED & GEN STORE KANPUR(NAGAR
+	// 5. LAXMI MEDICAL STORE MUNSI GANJ
+	// 6. BANK CHARGES HDFC
+	expectedCount := 6
+	if len(transactions) != expectedCount {
+		t.Errorf("Expected %d transactions, got %d", expectedCount, len(transactions))
+		for i, tx := range transactions {
+			t.Logf("Transaction %d: Date=%v Party='%s' Location='%s' Amount=%.2f Mode=%s Narration='%s'",
+				i+1, tx.Date.Format("Jan 2"), tx.PartyName, tx.Location, tx.Amount, tx.PaymentMode, tx.Narration)
+		}
+	}
+
+	// Verify first transaction - SAHU MEDICAL CENTRE with CHEQUE
+	if len(transactions) >= 1 {
+		tx := transactions[0]
+		if tx.PartyName != "SAHU MEDICAL CENTRE" {
+			t.Errorf("Transaction 1: Expected party 'SAHU MEDICAL CENTRE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "ASHOTHAR" {
+			t.Errorf("Transaction 1: Expected location 'ASHOTHAR', got '%s'", tx.Location)
+		}
+		if tx.Amount != 125213.00 {
+			t.Errorf("Transaction 1: Expected amount 125213.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "CHEQUE" {
+			t.Errorf("Transaction 1: Expected mode 'CHEQUE', got '%s'", tx.PaymentMode)
+		}
+		// Narration should NOT contain DDG references
+		if contains(tx.Narration, "DDG00236") {
+			t.Errorf("Transaction 1: Narration should not contain DDG refs, got '%s'", tx.Narration)
+		}
+	}
+
+	// Verify PAYTM BUSINESS with NEFT
+	if len(transactions) >= 3 {
+		tx := transactions[2]
+		if tx.PartyName != "PAYTM BUSINESS" {
+			t.Errorf("Transaction 3: Expected party 'PAYTM BUSINESS', got '%s'", tx.PartyName)
+		}
+		if tx.Amount != 25310.00 {
+			t.Errorf("Transaction 3: Expected amount 25310.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "NEFT" {
+			t.Errorf("Transaction 3: Expected mode 'NEFT', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify MAA VAISHNO with TRF (internal transfer)
+	if len(transactions) >= 4 {
+		tx := transactions[3]
+		if tx.PartyName != "MAA VAISHNO MED & GEN STORE" {
+			t.Errorf("Transaction 4: Expected party 'MAA VAISHNO MED & GEN STORE', got '%s'", tx.PartyName)
+		}
+		// Location contains KANPUR(NAGAR - a quirky format in the original data
+		if tx.Amount != 75901.00 {
+			t.Errorf("Transaction 4: Expected amount 75901.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "TRF" {
+			t.Errorf("Transaction 4: Expected mode 'TRF', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify BANK CHARGES with RTGS
+	if len(transactions) >= 6 {
+		tx := transactions[5]
+		if tx.PartyName != "BANK CHARGES" {
+			t.Errorf("Transaction 6: Expected party 'BANK CHARGES', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "HDFC" {
+			t.Errorf("Transaction 6: Expected location 'HDFC', got '%s'", tx.Location)
+		}
+		if tx.Amount != 1000000.00 {
+			t.Errorf("Transaction 6: Expected amount 1000000.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "RTGS" {
+			t.Errorf("Transaction 6: Expected mode 'RTGS', got '%s'", tx.PaymentMode)
+		}
+	}
+}
+
+func TestSkipCommaStartingLines(t *testing.T) {
+	// Test that comma-starting lines (invoice ref continuation) are skipped
+	input := `Oct 1 SAHU MEDICAL CENTRE ASHOTHAR 125213.00
+ICICI 192105002017 125213.00
+Chq.000036 Dt. 01-10-2025 Ag. ,DDG00236,DDG011513
+,DDG
+,DDG012345`
+
+	transactions := Parse(input, 2025)
+
+	if len(transactions) != 1 {
+		t.Errorf("Expected 1 transaction, got %d", len(transactions))
+	}
+
+	if len(transactions) > 0 {
+		tx := transactions[0]
+		if tx.PartyName != "SAHU MEDICAL CENTRE" {
+			t.Errorf("Expected party 'SAHU MEDICAL CENTRE', got '%s'", tx.PartyName)
+		}
+		// Narration should not contain the continuation lines
+		if contains(tx.Narration, ",DDG") {
+			t.Errorf("Narration should not contain ',DDG', got '%s'", tx.Narration)
+		}
+	}
+}
+
+func TestTransactionWithoutNarration(t *testing.T) {
+	// Test transactions that only have bank account line (no payment details)
+	input := `Oct 18 LAXMI MEDICAL STORE MUNSI GANJ 144.00
+ICICI 192105002017 144.00
+65172.00 65172.00`
+
+	transactions := Parse(input, 2025)
+
+	if len(transactions) != 1 {
+		t.Errorf("Expected 1 transaction, got %d", len(transactions))
+	}
+
+	if len(transactions) > 0 {
+		tx := transactions[0]
+		if tx.PartyName != "LAXMI MEDICAL STORE MUNSI" {
+			t.Errorf("Expected party 'LAXMI MEDICAL STORE MUNSI', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "GANJ" {
+			t.Errorf("Expected location 'GANJ', got '%s'", tx.Location)
+		}
+		if tx.Amount != 144.00 {
+			t.Errorf("Expected amount 144.00, got %.2f", tx.Amount)
+		}
+		// Should have bank account in narration
+		if !contains(tx.Narration, "ICICI 192105002017") {
+			t.Errorf("Expected narration to contain bank account, got '%s'", tx.Narration)
+		}
+		// Payment mode should be OTHER since no payment pattern
+		if tx.PaymentMode != "OTHER" {
+			t.Errorf("Expected mode 'OTHER', got '%s'", tx.PaymentMode)
+		}
+	}
+}
+
+func TestOctober2025AllPaymentModes(t *testing.T) {
+	// Test October 2025 format with all payment mode variations
+	input := `RECEIPT BOOK
+01-10-2025 - 31-10-2025 Page No..1
+------------------------------------------------------------------------------
+DATE PARTICULARS DEBIT CREDIT
+------------------------------------------------------------------------------
+Oct 1 STORE ONE GAO 1000.00
+ICICI 192105002017 1000.00
+UPI/564064611301/PAID VIA NAVI U/8953247523@NAVI/HDFC BANK LTD
+----------------------------------
+1000.00 1000.00
+==================================
+Oct 2 STORE TWO CHAURA 2000.00
+ICICI 192105002017 2000.00
+MMT/IMPS/527412932576/DURGA/AGNIHOTRIM/UNION BANKOF I
+----------------------------------
+2000.00 2000.00
+==================================
+Oct 3 STORE THREE SUMER 3000.00
+ICICI 192105002017 3000.00
+NEFT-YESBN12025100101810778-ONE 97 COMMUNICATIONSLIMITED SETTL
+----------------------------------
+3000.00 3000.00
+==================================
+Oct 4 STORE FOUR KHERA 4000.00
+ICICI 192105002017 4000.00
+RTGS-HDFCR52025100568549007-DURGA DAWA GHAR-99998542266666
+----------------------------------
+4000.00 4000.00
+==================================
+Oct 5 STORE FIVE MUNSI 5000.00
+ICICI 192105002017 5000.00
+Chq.000036 Dt. 01-10-2025
+----------------------------------
+5000.00 5000.00
+==================================
+Oct 6 STORE SIX KANPUR 6000.00
+ICICI 192105002017 6000.00
+CLG/SK PHARMA/939825/SBI/30.09.2025
+----------------------------------
+6000.00 6000.00
+==================================
+Oct 7 STORE SEVEN LUCKNOW 7000.00
+ICICI 192105002017 7000.00
+TRF/MAA VAISHNO MEDICAL AND/001146/ICI/13.10.2025
+----------------------------------
+7000.00 7000.00
+==================================
+Oct 8 STORE EIGHT DELHI 8000.00
+ICICI 192105002017 8000.00
+INF/INFT/041854504681/AYUSH MEDICAL S
+----------------------------------
+8000.00 8000.00
+==================================
+------------------------------------------------------------------------------
+SUB TOTAL 36000.00 36000.00
+------------------------------------------------------------------------------`
+
+	transactions := Parse(input, 2025)
+
+	expectedCount := 8
+	if len(transactions) != expectedCount {
+		t.Errorf("Expected %d transactions, got %d", expectedCount, len(transactions))
+		for i, tx := range transactions {
+			t.Logf("Transaction %d: Party='%s' Location='%s' Amount=%.2f Mode=%s",
+				i+1, tx.PartyName, tx.Location, tx.Amount, tx.PaymentMode)
+		}
+	}
+
+	// Verify each transaction has correct payment mode
+	expectedModes := []struct {
+		party    string
+		location string
+		mode     string
+	}{
+		{"STORE ONE", "GAO", "UPI"},
+		{"STORE TWO", "CHAURA", "IMPS"},
+		{"STORE THREE", "SUMER", "NEFT"},
+		{"STORE FOUR", "KHERA", "RTGS"},
+		{"STORE FIVE", "MUNSI", "CHEQUE"},
+		{"STORE SIX", "KANPUR", "CLG"},
+		{"STORE SEVEN", "LUCKNOW", "TRF"},
+		{"STORE EIGHT", "DELHI", "INF"},
+	}
+
+	for i, expected := range expectedModes {
+		if i < len(transactions) {
+			tx := transactions[i]
+			if tx.PartyName != expected.party {
+				t.Errorf("Transaction %d: Expected party '%s', got '%s'", i+1, expected.party, tx.PartyName)
+			}
+			if tx.Location != expected.location {
+				t.Errorf("Transaction %d: Expected location '%s', got '%s'", i+1, expected.location, tx.Location)
+			}
+			if tx.PaymentMode != expected.mode {
+				t.Errorf("Transaction %d: Expected mode '%s', got '%s'", i+1, expected.mode, tx.PaymentMode)
+			}
+		}
+	}
+}
+
 func TestDetectPaymentMode(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -932,6 +1244,17 @@ func TestDetectPaymentMode(t *testing.T) {
 			name:      "INFT in middle",
 			narration: "TRANSFER/INFT/REF123",
 			want:      "INF",
+		},
+		// TRF patterns
+		{
+			name:      "TRF at start",
+			narration: "TRF/MAA VAISHNO MEDICAL AND/001146/ICI/13.10.2025",
+			want:      "TRF",
+		},
+		{
+			name:      "TRF with bank line",
+			narration: "ICICI 192105002017 75901.00 TRF/INTERNAL TRANSFER/REF123",
+			want:      "TRF",
 		},
 		// CHEQUE patterns
 		{

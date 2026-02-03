@@ -31,20 +31,24 @@ var (
 	// Lines to skip
 	skipPatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)^SUB\s+TOTAL`),
-		regexp.MustCompile(`(?i)\.\.\.Continued`),
+		regexp.MustCompile(`(?i)Continued\.\.`),                        // Continued..2, Continued..3, etc.
 		regexp.MustCompile(`(?i)^SUSPENSE\s+A/C`),
 		regexp.MustCompile(`(?i)^\s*$`),
-		regexp.MustCompile(`^-+$`),                                    // Separator lines
+		regexp.MustCompile(`^-+$`),                                    // Separator lines (-----)
+		regexp.MustCompile(`^=+$`),                                    // Separator lines (=====)
 		regexp.MustCompile(`(?i)^TOTAL\s+[\d,.]+\s+[\d,.]+$`),         // Total line
 		regexp.MustCompile(`(?i)^\*\*\*.*\*\*\*$`),                    // *** End of Report ***
 		regexp.MustCompile(`(?i)^DATE\s+PARTICULARS\s+DEBIT\s+CREDIT`), // Header line
 		regexp.MustCompile(`(?i)^RECEIPT\s+BOOK`),                     // Receipt book header
 		regexp.MustCompile(`(?i)^DURGA\s+DAWA\s+GHAR`),                // Company name header
-		regexp.MustCompile(`(?i)^\d{2}-\d{2}-\d{4}\s+-\s+\d{2}-\d{2}-\d{4}$`), // Date range header
+		regexp.MustCompile(`(?i)^\d{2}-\d{2}-\d{4}\s+-\s+\d{2}-\d{2}-\d{4}`), // Date range header (with optional page number)
 		regexp.MustCompile(`(?i)^E-Mail\s*:`),                         // Email line
 		regexp.MustCompile(`(?i)^D\.?L\.?\s*No\.?\s*:`),               // DL number line
 		regexp.MustCompile(`(?i)^GSTIN\s*:`),                          // GSTIN line
 		regexp.MustCompile(`(?i)^\d+/\d+,`),                           // Address line (60/33,...)
+		regexp.MustCompile(`(?i)^Page\s+No\.`),                        // Page number line
+		regexp.MustCompile(`^\d+(\.\d{2})?\s+\d+(\.\d{2})?$`),         // Balance lines (75901.00 75901.00)
+		regexp.MustCompile(`^,`),                                      // Invoice ref continuation (,DDG)
 	}
 
 	// Payment mode detection patterns
@@ -55,6 +59,7 @@ var (
 	rtgsModePattern = regexp.MustCompile(`(?i)\sRTGS-|^RTGS-`)
 	clgModePattern  = regexp.MustCompile(`(?i)\sCLG/|^CLG/`)
 	infModePattern  = regexp.MustCompile(`(?i)\sINF/|^INF/|^INFT/|/INFT/|\sINFT/`)
+	trfModePattern  = regexp.MustCompile(`(?i)\sTRF/|^TRF/`)
 	chqModePattern  = regexp.MustCompile(`(?i)Chq\.|Cheque|CHQ`)
 	posModePattern  = regexp.MustCompile(`(?i)FT-MESPOS|MESPOS\s+SET|POS\s+MACHINE`)
 	cashModePattern = regexp.MustCompile(`(?i)^BY\s+CASH|\sBY\s+CASH|CASH\s+DEP|CAM/`)
@@ -214,7 +219,7 @@ func isPartyLine(line string) bool {
 	// Should not start with known narration patterns
 	upperLine := strings.ToUpper(line)
 	narrationPrefixes := []string{
-		"UPI/", "NEFT-", "RTGS-", "IMPS/", "MMT/", "CLG/", "INF/", "INFT/",
+		"UPI/", "NEFT-", "RTGS-", "IMPS/", "MMT/", "CLG/", "INF/", "INFT/", "TRF/",
 		"CHQ.", "CHEQUE", "BY CASH", "FT-MESPOS", "BIL/",
 		"AG.", "AG ", // Invoice reference lines (Ag. DDG...) - should not be party lines
 	}
@@ -338,6 +343,13 @@ func parsePartyNameLocation(text string) (name, location string) {
 		"MANAVATI", "JAFARGANJ", "KATHARA", "LALGANJ", "HUSAIN",
 		"DILEEP", "BAHUA", "KHAIR", "ROSHNMAU", "GAJNER", "KANCHAUSI",
 		"UGU", "JAMUKA", "FARIDPUR", "UMRI", "BADARKA", "ALIYAPUR",
+		// Additional locations from October 2025 receipt book
+		"ASHOTHAR", "PURAMEER", "BASREHAR", "AUSER", "GUJANI", "JALALABAD",
+		"SHAHNAGAR", "AMRAUDHA", "COLONELGANJ", "MAINPURI", "NADEMAU",
+		"AUNG", "GAYA", "SHIVALI", "BABARO", "BELA", "SINGHPUR", "AMAULI",
+		"RAWATPUR", "NAGAR", "KHANPUR", "KHAR", "RATH",
+		// Additional locations from October 2025 full data
+		"MUNSI", "GAO", "CHAURA", "SUMER", "KHERA",
 	}
 
 	words := strings.Fields(text)
@@ -401,6 +413,9 @@ func detectPaymentMode(narration string) string {
 	}
 	if infModePattern.MatchString(narration) {
 		return "INF"
+	}
+	if trfModePattern.MatchString(narration) {
+		return "TRF"
 	}
 	if chqModePattern.MatchString(narration) {
 		return "CHEQUE"
