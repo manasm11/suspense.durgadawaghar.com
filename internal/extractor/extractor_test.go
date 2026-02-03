@@ -207,6 +207,16 @@ func TestExtractIMPSName(t *testing.T) {
 			narration: "MMT/IMPS/528819823026/50000078106642 /RAPIPAY FI/YES BANK LTD",
 			want:      []string{"RAPIPAY FI"},
 		},
+		{
+			name:      "IMPS P2A format",
+			narration: "MMT/IMPS/528764057172/IMPS P2A DURGA /GUPTA MEDI/UCO BANK",
+			want:      []string{"DURGA", "GUPTA MEDI"},
+		},
+		{
+			name:      "IMPS with payment description (filters out PAYMENT suffix)",
+			narration: "MMT/IMPS/529811848407/MASTODINPAYMENT/AMANPHARMA/BANK OF BARODA",
+			want:      []string{"AMANPHARMA"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -255,6 +265,16 @@ func TestExtractBankName(t *testing.T) {
 			name:      "IMPS with secondary reference format",
 			narration: "MMT/IMPS/528819823026/50000078106642 /RAPIPAY FI/YES BANK LTD",
 			want:      []string{"YES BANK"},
+		},
+		{
+			name:      "IMPS P2A format",
+			narration: "MMT/IMPS/528764057172/IMPS P2A DURGA /GUPTA MEDI/UCO BANK",
+			want:      []string{"UCO BANK"},
+		},
+		{
+			name:      "IMPS with payment description - Bank of Baroda normalized",
+			narration: "MMT/IMPS/529811848407/MASTODINPAYMENT/AMANPHARMA/BANK OF BARODA",
+			want:      []string{"BANK OF BARODA"},
 		},
 	}
 

@@ -63,6 +63,8 @@ var (
 	impsTwoNamesPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/([A-Z][A-Z\s]*)/([A-Z][A-Z\s]*)/(.+)`)
 	// MMT/IMPS/<ref>/<secondary_ref> /<name>/<bank> - secondary reference format with space before slash
 	impsSecondaryRefPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/\d+\s*/([^/]+)/(.+)`)
+	// MMT/IMPS/<ref>/IMPS P2A <sender> /<receiver>/<bank> - P2A (Person to Account) format
+	impsP2APattern = regexp.MustCompile(`MMT/IMPS/\d{12}/IMPS P2A\s+([^/]+?)\s*/([^/]+)/(.+)`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -122,7 +124,7 @@ func normalizeBank(raw string) string {
 	return raw
 }
 
-// isValidIMPSName checks if the extracted name is valid (not a status code)
+// isValidIMPSName checks if the extracted name is valid (not a status code or payment description)
 func isValidIMPSName(name string) bool {
 	name = strings.TrimSpace(name)
 	if len(name) < 2 {
@@ -134,6 +136,10 @@ func isValidIMPSName(name string) bool {
 		if name == code {
 			return false
 		}
+	}
+	// Reject payment descriptions (e.g., "MASTODINPAYMENT", "XYZPAYMENT")
+	if strings.HasSuffix(strings.ToUpper(name), "PAYMENT") {
+		return false
 	}
 	// Names should contain at least one letter
 	hasLetter := false
@@ -182,6 +188,20 @@ func extractIMPSData(narration string) (names []string, bank string) {
 			names = append(names, name)
 		}
 		bank = normalizeBank(matches[2])
+		return
+	}
+
+	// Try MMT/IMPS/ref/IMPS P2A <sender> /<receiver>/<bank> pattern (P2A format)
+	if matches := impsP2APattern.FindStringSubmatch(upperNarration); len(matches) > 3 {
+		sender := strings.TrimSpace(matches[1])
+		receiver := strings.TrimSpace(matches[2])
+		if isValidIMPSName(sender) {
+			names = append(names, sender)
+		}
+		if isValidIMPSName(receiver) {
+			names = append(names, receiver)
+		}
+		bank = normalizeBank(matches[3])
 		return
 	}
 
