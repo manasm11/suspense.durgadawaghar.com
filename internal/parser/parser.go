@@ -216,6 +216,7 @@ func isPartyLine(line string) bool {
 	narrationPrefixes := []string{
 		"UPI/", "NEFT-", "RTGS-", "IMPS/", "MMT/", "CLG/", "INF/", "INFT/",
 		"CHQ.", "CHEQUE", "BY CASH", "FT-MESPOS", "BIL/",
+		"AG.", "AG ", // Invoice reference lines (Ag. DDG...) - should not be party lines
 	}
 	for _, prefix := range narrationPrefixes {
 		if strings.HasPrefix(upperLine, prefix) {
@@ -332,6 +333,11 @@ func parsePartyNameLocation(text string) (name, location string) {
 		"SAKURABAD", "SUMRAHA", "MURADAB", "GURSHAYAN",
 		"BARADEVI", "BARRA", "PATARSA", "KHAGA", "KORIYAN",
 		"BHOGNIPUR", "RAJPUR", "SAHJHANPUR",
+		// Additional locations from July 2025 receipt book
+		"CHITRAKOOT", "PRAYAGRAJ", "LALPUR", "BIHARIPURWA", "AHIRWA",
+		"MANAVATI", "JAFARGANJ", "KATHARA", "LALGANJ", "HUSAIN",
+		"DILEEP", "BAHUA", "KHAIR", "ROSHNMAU", "GAJNER", "KANCHAUSI",
+		"UGU", "JAMUKA", "FARIDPUR", "UMRI", "BADARKA", "ALIYAPUR",
 	}
 
 	words := strings.Fields(text)

@@ -689,6 +689,183 @@ SUB TOTAL 517169.00 517169.00
 	}
 }
 
+func TestParseJuly2025ReceiptBook(t *testing.T) {
+	// Test with actual July 2025 receipt book data
+	// This format has some transactions without the bank account line
+	input := `DURGA DAWA GHAR (PARTNER)
+60/33,PURANI DAL MANDI KANPUR
+E-Mail : durgadawaghar2022@gmail.com
+D.L.No. : UP7820B001680,UP7821B001673
+GSTIN : 09AATFD8891P1Z2
+RECEIPT BOOK
+01-07-2025 - 31-07-2025
+------------------------------------------------------------------------------
+DATE PARTICULARS DEBIT CREDIT
+------------------------------------------------------------------------------
+Jul 1 MR ANURAG SHARMA(PROVIMINI) KANPUR 6000.00
+ICICI 192105002017 6000.00
+MMT/IMPS/518211116991/OK/ANURAG SHA/HDFC BANK
+Jul 1 RAM JI MEDICAL STORE KENJARI 35000.00
+ICICI 192105002017 35000.00
+UPI/9919375846@IBL/PAYMENT FROM PH/STATE BANK OF I/378958118211/IBL54D1AC686
+Jul 1 J.K MED STORE (JAFARGANJ) FATEHPUR 111918.00
+ICICI 192105002017 111918.00
+NEFT-BARBN52025070146956385-J K MEDICAL STORE--54220200000128-BARB0BUPGBX
+Jul 7 SUSPENSE A/C 2000.00
+ICICI 192105002017 2000.00
+UPI/528967984881/PAYMENT FROM PH/UMASHANKAR4444Y/INDIAN BANK/AXLF8B1D253C871
+Jul 7 ANSH MEDICAL STORE FATEHPUR 10000.00
+ICICI 192105002017 10000.00
+UPI/518810832519/UPI/SG81818282-8@OK/AXIS BANK/AXI27CCFEDAA43F405F8A1DB4FBBE
+Jul 14 PALAK MEDICAL AGENCIES BANDA 28307.00
+UPI/100976122989/DURGA/7355103104@HDFC/HDFC BANK LTD/HDF08F768440A4B425BB125
+Jul 14 UPMANYU TRADERS BIRHANA ROAD 4774.00
+ICICI 192105002017 4774.00
+NEFT-YESBN12025071405685000-ONE 97 COMMUNICATIONSLIMITED SETTL--001425000000
+Jul 18 YADAV MED STORE AJGAIN 6826.00
+ICICI 192105002017 6826.00
+Ag. DDG010296,DDG010661
+Jul 21 POLICE 2000.00
+ICICI 192105002017 2000.00
+UPI/520284704051/UPI/BHAIASIF853@OKI/STATE BANK OF I/ICI81512593D4A24BA6A9FF
+Jul 31 JAY MAHAKALI MEDICAL STORE MAUDAHA 20246.00
+UPI/521230139687/UPI/SUKHBEERDANPURA/BANK OF BARODA/AXIE22B11F268CF422B8D0B6
+Jul 31 MANVI MEDICAL STORE ALIYAPUR 2000.00
+ICICI 192105002017 2000.00
+UPI/521204558516/UPI/KULDEEPYADAV.84/BANK OF INDIA/AXIDC84EB6EAB714B0F864FBD
+------------------------------------------------------------------------------
+SUB TOTAL 226071.00 226071.00
+------------------------------------------------------------------------------`
+
+	transactions := Parse(input, 2025)
+
+	// Expected transactions:
+	// 1. MR ANURAG SHARMA(PROVIMINI) KANPUR
+	// 2. RAM JI MEDICAL STORE KENJARI
+	// 3. J.K MED STORE (JAFARGANJ) FATEHPUR
+	// 4. SUSPENSE A/C - should be SKIPPED
+	// 5. ANSH MEDICAL STORE FATEHPUR
+	// 6. PALAK MEDICAL AGENCIES BANDA (no bank line!)
+	// 7. UPMANYU TRADERS BIRHANA ROAD
+	// 8. YADAV MED STORE AJGAIN
+	// 9. POLICE
+	// 10. JAY MAHAKALI MEDICAL STORE MAUDAHA (no bank line!)
+	// 11. MANVI MEDICAL STORE ALIYAPUR
+	expectedCount := 10 // SUSPENSE A/C is skipped
+	if len(transactions) != expectedCount {
+		t.Errorf("Expected %d transactions, got %d", expectedCount, len(transactions))
+		for i, tx := range transactions {
+			t.Logf("Transaction %d: Date=%v Party='%s' Location='%s' Amount=%.2f Mode=%s Narration='%s'",
+				i+1, tx.Date.Format("Jan 2"), tx.PartyName, tx.Location, tx.Amount, tx.PaymentMode, tx.Narration)
+		}
+	}
+
+	// Verify first transaction - MR ANURAG SHARMA with IMPS
+	if len(transactions) >= 1 {
+		tx := transactions[0]
+		if tx.PartyName != "MR ANURAG SHARMA(PROVIMINI)" {
+			t.Errorf("Transaction 1: Expected party 'MR ANURAG SHARMA(PROVIMINI)', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "KANPUR" {
+			t.Errorf("Transaction 1: Expected location 'KANPUR', got '%s'", tx.Location)
+		}
+		if tx.Amount != 6000.00 {
+			t.Errorf("Transaction 1: Expected amount 6000.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "IMPS" {
+			t.Errorf("Transaction 1: Expected mode 'IMPS', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify J.K MED STORE with NEFT
+	if len(transactions) >= 3 {
+		tx := transactions[2]
+		if tx.PartyName != "J.K MED STORE (JAFARGANJ)" {
+			t.Errorf("Transaction 3: Expected party 'J.K MED STORE (JAFARGANJ)', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "FATEHPUR" {
+			t.Errorf("Transaction 3: Expected location 'FATEHPUR', got '%s'", tx.Location)
+		}
+		if tx.PaymentMode != "NEFT" {
+			t.Errorf("Transaction 3: Expected mode 'NEFT', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify PALAK MEDICAL AGENCIES - no bank account line, just UPI
+	if len(transactions) >= 5 {
+		tx := transactions[4]
+		if tx.PartyName != "PALAK MEDICAL AGENCIES" {
+			t.Errorf("Transaction 5: Expected party 'PALAK MEDICAL AGENCIES', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "BANDA" {
+			t.Errorf("Transaction 5: Expected location 'BANDA', got '%s'", tx.Location)
+		}
+		if tx.Amount != 28307.00 {
+			t.Errorf("Transaction 5: Expected amount 28307.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "UPI" {
+			t.Errorf("Transaction 5: Expected mode 'UPI', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify YADAV MED STORE - has only Ag. reference in narration (should be stripped)
+	if len(transactions) >= 7 {
+		tx := transactions[6]
+		if tx.PartyName != "YADAV MED STORE" {
+			t.Errorf("Transaction 7: Expected party 'YADAV MED STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "AJGAIN" {
+			t.Errorf("Transaction 7: Expected location 'AJGAIN', got '%s'", tx.Location)
+		}
+		// Ag. reference should be stripped, leaving only bank account line
+		if contains(tx.Narration, "DDG010296") {
+			t.Errorf("Transaction 7: Narration should not contain DDG ref, got '%s'", tx.Narration)
+		}
+	}
+
+	// Verify POLICE - single word party name
+	if len(transactions) >= 8 {
+		tx := transactions[7]
+		if tx.PartyName != "POLICE" {
+			t.Errorf("Transaction 8: Expected party 'POLICE', got '%s'", tx.PartyName)
+		}
+		if tx.Amount != 2000.00 {
+			t.Errorf("Transaction 8: Expected amount 2000.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "UPI" {
+			t.Errorf("Transaction 8: Expected mode 'UPI', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify JAY MAHAKALI - no bank account line
+	if len(transactions) >= 9 {
+		tx := transactions[8]
+		if tx.PartyName != "JAY MAHAKALI MEDICAL STORE" {
+			t.Errorf("Transaction 9: Expected party 'JAY MAHAKALI MEDICAL STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "MAUDAHA" {
+			t.Errorf("Transaction 9: Expected location 'MAUDAHA', got '%s'", tx.Location)
+		}
+		if tx.Amount != 20246.00 {
+			t.Errorf("Transaction 9: Expected amount 20246.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "UPI" {
+			t.Errorf("Transaction 9: Expected mode 'UPI', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify MANVI MEDICAL STORE
+	if len(transactions) >= 10 {
+		tx := transactions[9]
+		if tx.PartyName != "MANVI MEDICAL STORE" {
+			t.Errorf("Transaction 10: Expected party 'MANVI MEDICAL STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "ALIYAPUR" {
+			t.Errorf("Transaction 10: Expected location 'ALIYAPUR', got '%s'", tx.Location)
+		}
+	}
+}
+
 func TestDetectPaymentMode(t *testing.T) {
 	tests := []struct {
 		name      string
