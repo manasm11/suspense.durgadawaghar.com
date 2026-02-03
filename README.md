@@ -11,7 +11,7 @@ A web application for managing suspense account transactions from receipt books.
   - Bank account numbers (9-18 digit account numbers)
   - IFSC codes (bank branch identifiers)
 - **Payment Mode Detection**: Identifies transaction types:
-  - UPI, IMPS, NEFT, RTGS, CLG (clearing/cheque), INF (internal fund transfer), CHEQUE
+  - UPI, IMPS, NEFT, RTGS, CLG (clearing/cheque), INF (internal fund transfer), TRF (transfer), CHEQUE, POS, CASH
 - **Party Matching**: Automatically links transactions to parties based on extracted identifiers
 - **Search**: Search parties by name, location, or any identifier
 
@@ -38,21 +38,20 @@ go install github.com/a-h/templ/cmd/templ@latest
 ### Build and Run
 
 ```bash
-# Generate templ files and build
+# Using Makefile (recommended)
+make build    # Generate templ files and build
+make run      # Generate and run server
+
+# Or manually
 go generate ./...
 go build -o bin/server ./cmd/server
-
-# Run the server
 ./bin/server
-
-# Or run directly
-go run ./cmd/server
 ```
 
 ### Command Line Options
 
 ```
--port int    HTTP server port (default 8080)
+-port int    HTTP server port (default 8005)
 -db string   SQLite database path (default "suspense.db")
 ```
 
@@ -60,11 +59,13 @@ go run ./cmd/server
 
 ```bash
 # Run tests
-go test ./...
+make test     # or: go test ./...
 
 # Format code
-go fmt ./...
-templ fmt .
+make fmt      # or: go fmt ./... && templ fmt .
+
+# Regenerate sqlc code after schema changes
+make sqlc
 ```
 
 ## Project Structure
@@ -89,8 +90,8 @@ templ fmt .
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /` | Home page |
-| `GET /search?q=` | Search parties |
+| `GET /` | Home page with search |
+| `POST /search` | Search parties by narration |
 | `GET /parties` | List all parties |
 | `GET /party/{id}` | Party details and transactions |
 | `GET /import` | Import form |

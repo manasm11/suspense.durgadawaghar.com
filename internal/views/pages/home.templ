@@ -18,9 +18,21 @@ templ Home() {
 				hx-target="#results"
 				hx-trigger="input changed delay:300ms, paste changed delay:100ms"
 				hx-indicator="#loading"
+				autofocus
 			/>
 			<span id="loading" class="htmx-indicator">Searching...</span>
 		</form>
+		<script>
+			document.addEventListener('visibilitychange', function() {
+				if (document.visibilityState === 'visible') {
+					var el = document.getElementById('narration');
+					if (el) {
+						el.value = '';
+						el.focus();
+					}
+				}
+			});
+		</script>
 
 		<div id="results"></div>
 

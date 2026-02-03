@@ -8,6 +8,7 @@ deps:
 	go mod download
 	go install github.com/a-h/templ/cmd/templ@latest
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+	go install github.com/air-verse/air@latest
 
 # Generate templ files
 templ:

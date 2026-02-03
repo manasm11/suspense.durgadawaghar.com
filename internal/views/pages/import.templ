@@ -85,7 +85,7 @@ templ ImportPreview(transactions []PreviewTransaction, rawData string, year int)
 		<form hx-post="/import/confirm" hx-target="#preview" hx-indicator="#confirming">
 			<input type="hidden" name="data" value={ rawData }/>
 			<input type="hidden" name="year" value={ intToString(year) }/>
-			<button type="submit" class="success">
+			<button type="submit">
 				Confirm Import
 				<span id="confirming" class="htmx-indicator"> Importing...</span>
 			</button>
