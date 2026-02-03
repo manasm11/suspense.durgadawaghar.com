@@ -22,12 +22,25 @@ type Identifier struct {
 }
 
 var (
-	// UPI VPA: user@provider (e.g., 9450852076@YBL, SUNEELBHADEVANA@HDFC)
-	upiPattern = regexp.MustCompile(`([a-zA-Z0-9][a-zA-Z0-9._-]{1,255}@[a-zA-Z]{2,64})`)
+	// UPI VPA: user@provider (e.g., 9450852076@YBL, SUNEELBHADEVANA@HDFC, ATKRISHAN12-2@O)
+	upiPattern = regexp.MustCompile(`([a-zA-Z0-9][a-zA-Z0-9._-]{1,255}@[a-zA-Z]{1,64})`)
 
 	// UPI ID from narration format: UPI/<txn_id>/UPI/<upi_id>/<bank>
 	// Captures the UPI ID (e.g., ANUJ19SENGARR-3 from UPI/564031341768/UPI/ANUJ19SENGARR-3/KOTAK MAHINDRA)
-	upiNarrationPattern = regexp.MustCompile(`UPI/\d+/UPI/([A-Za-z0-9._-]+)/`)
+	// Also handles UPI IDs with @ symbol (e.g., ATKRISHAN12-2@O from UPI/112114924711/UPI/ATKRISHAN12-2@O/HDFC BANK LTD)
+	upiNarrationPattern = regexp.MustCompile(`UPI/\d+/UPI/([A-Za-z0-9._@-]+)/`)
+
+	// UPI ID from alternate narration format: UPI/<name>/<upi_id>/PAYMENT FR/<bank>/<ref>/<provider_code>
+	// Captures the UPI ID (e.g., SHRIVASMAHESH2 from UPI/MR MAHESH/SHRIVASMAHESH2/PAYMENT FR/BANK OF BA/464278460653/YBLE6E8037FC)
+	upiNarrationPattern2 = regexp.MustCompile(`UPI/[^/]+/([A-Za-z0-9._-]+)/PAYMENT FR/`)
+
+	// UPI ID from narration format: UPI/<txn_id>/<name>/<upi_id>/<location>/<ref>
+	// Captures the UPI ID (e.g., RKROHITKUMAR459 from UPI/112177057693/TULSHI MEDICAL/RKROHITKUMAR459/UTTAR PRADESH G/HDF0C8DB9785)
+	upiNarrationPattern3 = regexp.MustCompile(`UPI/\d+/[^/]+/([A-Za-z0-9._@-]+)/`)
+
+	// UPI ID from narration format: UPI/<name>/<upi_id>/<other>/<bank>/<ref>/<code>
+	// Captures the UPI ID (e.g., JAYANTSINGH246 from UPI/JAYANT SIN/JAYANTSINGH246/DURGA/KOTAK MAHI/564648156111/ICI7B61D9D2074F4)
+	upiNarrationPattern4 = regexp.MustCompile(`UPI/[^/]+/([A-Za-z0-9._@-]+)/[^/]+/[^/]+/\d+/`)
 
 	// Phone: 10 digits starting with 6-9
 	phonePattern = regexp.MustCompile(`(?:^|[^\d])([6-9]\d{9})(?:[^\d]|$)`)
@@ -69,6 +82,54 @@ func Extract(narration string) []Identifier {
 	// Extract UPI IDs from narration format (UPI/<txn_id>/UPI/<upi_id>/<bank>)
 	upiNarrationMatches := upiNarrationPattern.FindAllStringSubmatch(upperNarration, -1)
 	for _, match := range upiNarrationMatches {
+		if len(match) > 1 {
+			value := match[1]
+			key := string(TypeUPIVPA) + ":" + value
+			if !seen[key] {
+				seen[key] = true
+				identifiers = append(identifiers, Identifier{
+					Type:  TypeUPIVPA,
+					Value: value,
+				})
+			}
+		}
+	}
+
+	// Extract UPI IDs from alternate narration format (UPI/<name>/<upi_id>/PAYMENT FR/)
+	upiNarrationMatches2 := upiNarrationPattern2.FindAllStringSubmatch(upperNarration, -1)
+	for _, match := range upiNarrationMatches2 {
+		if len(match) > 1 {
+			value := match[1]
+			key := string(TypeUPIVPA) + ":" + value
+			if !seen[key] {
+				seen[key] = true
+				identifiers = append(identifiers, Identifier{
+					Type:  TypeUPIVPA,
+					Value: value,
+				})
+			}
+		}
+	}
+
+	// Extract UPI IDs from narration format (UPI/<txn_id>/<name>/<upi_id>/<location>/)
+	upiNarrationMatches3 := upiNarrationPattern3.FindAllStringSubmatch(upperNarration, -1)
+	for _, match := range upiNarrationMatches3 {
+		if len(match) > 1 {
+			value := match[1]
+			key := string(TypeUPIVPA) + ":" + value
+			if !seen[key] {
+				seen[key] = true
+				identifiers = append(identifiers, Identifier{
+					Type:  TypeUPIVPA,
+					Value: value,
+				})
+			}
+		}
+	}
+
+	// Extract UPI IDs from narration format (UPI/<name>/<upi_id>/<other>/<bank>/<ref>/<code>)
+	upiNarrationMatches4 := upiNarrationPattern4.FindAllStringSubmatch(upperNarration, -1)
+	for _, match := range upiNarrationMatches4 {
 		if len(match) > 1 {
 			value := match[1]
 			key := string(TypeUPIVPA) + ":" + value
