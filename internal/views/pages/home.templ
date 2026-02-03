@@ -1,0 +1,46 @@
+package pages
+
+import "suspense.durgadawaghar.com/internal/views"
+
+templ Home() {
+	@views.Layout("Search") {
+		<h2>Search by Bank Narration</h2>
+		<p>Paste a bank statement narration to find matching parties from your receipt book data.</p>
+
+		<form hx-post="/search" hx-target="#results" hx-indicator="#loading">
+			<label for="narration">Bank Narration</label>
+			<textarea
+				id="narration"
+				name="narration"
+				placeholder="Paste bank narration here, e.g.:&#10;UPI/SANDHYA ME/9450852076@YBL/PAYMENT FR/STATE BANK/450854353978&#10;&#10;or&#10;&#10;NEFT-CBINH25360482077-M S VISHNOI MEDICAL STORE-//ATTN/VISHNOI-0000000364324"
+				rows="4"
+			></textarea>
+			<button type="submit">
+				Search
+				<span id="loading" class="htmx-indicator"> Searching...</span>
+			</button>
+		</form>
+
+		<div id="results"></div>
+
+		<h3>Example Narrations</h3>
+		<p>Click any example to try it:</p>
+		<ul>
+			<li>
+				<a href="#" onclick="document.getElementById('narration').value='UPI/SANDHYA ME/9450852076@YBL/PAYMENT FR/STATE BANK/450854353978'; return false;">
+					UPI transaction with VPA
+				</a>
+			</li>
+			<li>
+				<a href="#" onclick="document.getElementById('narration').value='NEFT-CBINH25360482077-M S VISHNOI MEDICAL STORE-//ATTN/VISHNOI-0000000364324'; return false;">
+					NEFT with account number
+				</a>
+			</li>
+			<li>
+				<a href="#" onclick="document.getElementById('narration').value='IMPS/450912345678/9876543210/Payment'; return false;">
+					IMPS with phone number
+				</a>
+			</li>
+		</ul>
+	}
+}

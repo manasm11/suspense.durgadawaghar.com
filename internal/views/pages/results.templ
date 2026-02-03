@@ -1,0 +1,109 @@
+package pages
+
+import (
+	"fmt"
+	"suspense.durgadawaghar.com/internal/matcher"
+)
+
+templ SearchResults(results []matcher.MatchResult, narration string) {
+	if len(results) == 0 {
+		<div class="error">
+			<h4>No Matches Found</h4>
+			<p>No parties in the database match the identifiers extracted from this narration.</p>
+			<p><strong>Extracted identifiers:</strong> None found or no matching records.</p>
+			<p>Try <a href="/import">importing more receipt book data</a> first.</p>
+		</div>
+	} else {
+		<h3>{ fmt.Sprintf("%d", len(results)) } { pluralMatch(len(results)) } Found</h3>
+
+		for _, result := range results {
+			<div class="result-card">
+				<h3>
+					{ result.Party.Name }
+					if result.Party.Location.Valid && result.Party.Location.String != "" {
+						<span class="location">({ result.Party.Location.String })</span>
+					}
+				</h3>
+
+				<p>
+					<strong>Confidence: </strong>
+					<span class={ confidenceClass(result.Confidence) }>
+						{ fmt.Sprintf("%.1f%%", result.Confidence) }
+					</span>
+				</p>
+
+				<p>
+					<strong>Matched on: </strong>
+					for _, m := range result.MatchedOn {
+						<span class={ "match-badge", m.Type }>{ m.Type }: { m.Value }</span>
+					}
+				</p>
+
+				<p class="stats">
+					<strong>History:</strong> { fmt.Sprintf("%d", result.TransactionCount) } transactions,
+					Total: ₹{ fmt.Sprintf("%.2f", result.TotalAmount) }
+				</p>
+
+				if len(result.RecentTxns) > 0 {
+					<details>
+						<summary>Recent Transactions ({ fmt.Sprintf("%d", len(result.RecentTxns)) })</summary>
+						<table class="txn-list">
+							<thead>
+								<tr>
+									<th>Date</th>
+									<th>Amount</th>
+									<th>Mode</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, txn := range result.RecentTxns {
+									<tr>
+										<td>{ txn.TransactionDate.Format("02 Jan 2006") }</td>
+										<td>₹{ fmt.Sprintf("%.2f", txn.Amount) }</td>
+										<td>{ txn.PaymentMode.String }</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</details>
+				}
+
+				<p>
+					<a href={ templ.SafeURL(fmt.Sprintf("/party/%d", result.Party.ID)) }>View Full Details →</a>
+				</p>
+			</div>
+		}
+	}
+}
+
+func confidenceClass(confidence float64) string {
+	if confidence >= 80 {
+		return "confidence-high"
+	} else if confidence >= 50 {
+		return "confidence-medium"
+	}
+	return "confidence-low"
+}
+
+func pluralMatch(n int) string {
+	if n > 1 {
+		return "Matches"
+	}
+	return "Match"
+}
+
+templ ExtractedIdentifiers(identifiers []ExtractedID) {
+	if len(identifiers) > 0 {
+		<p>
+			<strong>Extracted from narration: </strong>
+			for _, id := range identifiers {
+				<span class={ "match-badge", id.Type }>{ id.Type }: { id.Value }</span>
+			}
+		</p>
+	}
+}
+
+type ExtractedID struct {
+	Type  string
+	Value string
+}

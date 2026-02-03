@@ -1,0 +1,118 @@
+package pages
+
+import (
+	"fmt"
+	"suspense.durgadawaghar.com/internal/db/sqlc"
+	"suspense.durgadawaghar.com/internal/views"
+)
+
+templ PartyDetail(party sqlc.PartyWithStats, identifiers []sqlc.Identifier, transactions []sqlc.Transaction) {
+	@views.Layout(party.Name) {
+		<h2>
+			{ party.Name }
+			if party.Location.Valid && party.Location.String != "" {
+				<span class="location">({ party.Location.String })</span>
+			}
+		</h2>
+
+		<div class="stats">
+			<p>
+				<strong>Total Transactions:</strong> { fmt.Sprintf("%d", party.TransactionCount) }<br/>
+				<strong>Total Amount:</strong> ₹{ fmt.Sprintf("%.2f", party.TotalAmount) }
+			</p>
+		</div>
+
+		<h3>Identifiers</h3>
+		if len(identifiers) > 0 {
+			<ul>
+				for _, id := range identifiers {
+					<li>
+						<span class={ "match-badge", id.Type }>{ id.Type }</span>
+						{ id.Value }
+					</li>
+				}
+			</ul>
+		} else {
+			<p class="stats">No identifiers recorded for this party.</p>
+		}
+
+		<h3>Transaction History</h3>
+		if len(transactions) > 0 {
+			<table>
+				<thead>
+					<tr>
+						<th>Date</th>
+						<th>Amount</th>
+						<th>Payment Mode</th>
+						<th>Narration</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, txn := range transactions {
+						<tr>
+							<td>{ txn.TransactionDate.Format("02 Jan 2006") }</td>
+							<td>₹{ fmt.Sprintf("%.2f", txn.Amount) }</td>
+							<td>{ txn.PaymentMode.String }</td>
+							<td>
+								if txn.Narration.Valid {
+									<small>{ truncate(txn.Narration.String, 50) }</small>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<p class="stats">No transactions recorded for this party.</p>
+		}
+
+		<p><a href="/">← Back to Search</a></p>
+	}
+}
+
+templ PartyList(parties []sqlc.PartyWithStats) {
+	@views.Layout("All Parties") {
+		<h2>All Parties</h2>
+		<p class="stats">{ fmt.Sprintf("%d", len(parties)) } parties in database</p>
+
+		if len(parties) > 0 {
+			<table>
+				<thead>
+					<tr>
+						<th>Party Name</th>
+						<th>Location</th>
+						<th>Transactions</th>
+						<th>Total Amount</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, party := range parties {
+						<tr>
+							<td>
+								<a href={ templ.SafeURL(fmt.Sprintf("/party/%d", party.ID)) }>
+									{ party.Name }
+								</a>
+							</td>
+							<td>
+								if party.Location.Valid {
+									{ party.Location.String }
+								}
+							</td>
+							<td>{ fmt.Sprintf("%d", party.TransactionCount) }</td>
+							<td>₹{ fmt.Sprintf("%.2f", party.TotalAmount) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<p>No parties in database. <a href="/import">Import some data</a> first.</p>
+		}
+	}
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}

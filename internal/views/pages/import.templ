@@ -1,0 +1,136 @@
+package pages
+
+import (
+	"fmt"
+	"suspense.durgadawaghar.com/internal/views"
+)
+
+templ Import() {
+	@views.Layout("Import Data") {
+		<h2>Import Receipt Book Data</h2>
+		<p>Paste your receipt book data below. The parser expects the following format:</p>
+		<pre>
+Dec 26 BABA MEDICAL AND GENERAL STOR SHAMBHUA 11744.00
+ICICI 192105002017 11744.00
+Chq.704339 Dt. 26-12-2025 Ag. DDG024782
+
+Dec 26 SANDHYA MEDICAL STORE LUCKNOW 5000.00
+UPI/9450852076@YBL 5000.00
+</pre>
+
+		<form hx-post="/import/preview" hx-target="#preview" hx-indicator="#loading">
+			<label for="data">Receipt Book Data</label>
+			<textarea
+				id="data"
+				name="data"
+				placeholder="Paste receipt book data here..."
+				rows="15"
+			></textarea>
+
+			<label for="year">Year (for transactions without full date)</label>
+			<input type="number" id="year" name="year" value="2025" min="2000" max="2100"/>
+
+			<button type="submit">
+				Preview Import
+				<span id="loading" class="htmx-indicator"> Processing...</span>
+			</button>
+		</form>
+
+		<div id="preview"></div>
+	}
+}
+
+templ ImportPreview(transactions []PreviewTransaction, rawData string, year int) {
+	<h3>Preview: { len(transactions) } Transactions Found</h3>
+
+	if len(transactions) == 0 {
+		<div class="error">
+			No valid transactions found. Please check your data format.
+		</div>
+	} else {
+		<div class="preview-table">
+			<table>
+				<thead>
+					<tr>
+						<th>Date</th>
+						<th>Party Name</th>
+						<th>Location</th>
+						<th>Amount</th>
+						<th>Payment Mode</th>
+						<th>Identifiers Found</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, tx := range transactions {
+						<tr>
+							<td>{ tx.Date }</td>
+							<td>{ tx.PartyName }</td>
+							<td>{ tx.Location }</td>
+							<td>{ tx.Amount }</td>
+							<td>{ tx.PaymentMode }</td>
+							<td>
+								for _, id := range tx.Identifiers {
+									<span class={ "match-badge", id.Type }>{ id.Type }: { id.Value }</span>
+								}
+								if len(tx.Identifiers) == 0 {
+									<span class="stats">None</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+
+		<form hx-post="/import/confirm" hx-target="#preview" hx-indicator="#confirming">
+			<input type="hidden" name="data" value={ rawData }/>
+			<input type="hidden" name="year" value={ intToString(year) }/>
+			<button type="submit" class="success">
+				Confirm Import
+				<span id="confirming" class="htmx-indicator"> Importing...</span>
+			</button>
+		</form>
+	}
+}
+
+templ ImportResult(imported int, skipped int, errors []string) {
+	if len(errors) > 0 {
+		<div class="error">
+			<h4>Import completed with errors</h4>
+			<ul>
+				for _, err := range errors {
+					<li>{ err }</li>
+				}
+			</ul>
+		</div>
+	}
+
+	<div class="success">
+		<h4>Import Complete</h4>
+		<p>
+			<strong>{ intToString(imported) }</strong> transactions imported successfully.
+			if skipped > 0 {
+				<br/><strong>{ intToString(skipped) }</strong> entries skipped (SUSPENSE A/C or invalid).
+			}
+		</p>
+		<p><a href="/">Go to Search</a> | <a href="/parties">View Parties</a></p>
+	</div>
+}
+
+type PreviewTransaction struct {
+	Date        string
+	PartyName   string
+	Location    string
+	Amount      string
+	PaymentMode string
+	Identifiers []PreviewIdentifier
+}
+
+type PreviewIdentifier struct {
+	Type  string
+	Value string
+}
+
+func intToString(i int) string {
+	return fmt.Sprintf("%d", i)
+}

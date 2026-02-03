@@ -1,0 +1,69 @@
+package views
+
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } - Durga Dawa Ghar</title>
+			<link rel="stylesheet" href="/static/simple.min.css"/>
+			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+			<style>
+				.confidence-high { color: #2e7d32; font-weight: bold; }
+				.confidence-medium { color: #f57c00; font-weight: bold; }
+				.confidence-low { color: #c62828; font-weight: bold; }
+				.match-badge {
+					display: inline-block;
+					padding: 0.2em 0.5em;
+					margin: 0.2em;
+					border-radius: 4px;
+					font-size: 0.85em;
+					background: #e3f2fd;
+				}
+				.match-badge.upi_vpa { background: #e8f5e9; }
+				.match-badge.phone { background: #fff3e0; }
+				.match-badge.account_number { background: #fce4ec; }
+				.result-card {
+					border: 1px solid #ddd;
+					border-radius: 8px;
+					padding: 1em;
+					margin: 1em 0;
+					background: #fafafa;
+				}
+				.result-card h3 { margin-top: 0; }
+				.txn-list { font-size: 0.9em; }
+				.txn-list td { padding: 0.3em 0.5em; }
+				.preview-table { width: 100%; overflow-x: auto; }
+				.preview-table table { min-width: 800px; }
+				.htmx-indicator { display: none; }
+				.htmx-request .htmx-indicator { display: inline; }
+				.htmx-request.htmx-indicator { display: inline; }
+				textarea { width: 100%; min-height: 200px; font-family: monospace; }
+				.stats { color: #666; font-size: 0.9em; }
+				.nav-links { margin-bottom: 1em; }
+				.nav-links a { margin-right: 1em; }
+				.error { color: #c62828; padding: 1em; background: #ffebee; border-radius: 4px; }
+				.success { color: #2e7d32; padding: 1em; background: #e8f5e9; border-radius: 4px; }
+				.location { color: #666; font-size: 0.9em; }
+			</style>
+		</head>
+		<body>
+			<header>
+				<h1>Durga Dawa Ghar</h1>
+				<p>Narration to Party Matching Tool</p>
+				<nav class="nav-links">
+					<a href="/">Search</a>
+					<a href="/import">Import Data</a>
+					<a href="/parties">View Parties</a>
+				</nav>
+			</header>
+			<main>
+				{ children... }
+			</main>
+			<footer>
+				<p>Suspense Account Resolution Tool</p>
+			</footer>
+		</body>
+	</html>
+}
