@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	port := flag.Int("port", 8080, "HTTP server port")
+	port := flag.Int("port", 8005, "HTTP server port")
 	dbPath := flag.String("db", "suspense.db", "SQLite database path")
 	flag.Parse()
 
