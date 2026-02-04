@@ -15,6 +15,7 @@ const (
 	TypeIFSC          IdentifierType = "ifsc"
 	TypeIMPSName      IdentifierType = "imps_name" // Sender/receiver name from IMPS
 	TypeBankName      IdentifierType = "bank_name" // Bank name from IMPS
+	TypeNEFTName      IdentifierType = "neft_name" // Sender/receiver name from NEFT
 )
 
 // Identifier represents an extracted identifier from a narration
@@ -71,6 +72,11 @@ var (
 	impsP2APattern = regexp.MustCompile(`MMT/IMPS/\d{12}/IMPS P2A\s+([^/]+?)\s*/([^/]+)/(.+)`)
 	// MMT/IMPS/<ref>/REQPAY/<name> /<bank> - REQPAY format (request payment)
 	impsREQPAYPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/REQPAY/([^/]+?)\s*/(.+)`)
+
+	// NEFT pattern: NEFT-<IFSC_PREFIX><REF>-<NAME>-<rest>
+	// Examples: NEFT-UCBAN52025040104667985-SHRI SHYAM AGENCY-/FAST///
+	//           NEFT-BARBN52025040226217799-VAIBHAV LAXMI MEDICALSTORE--37100200000337
+	neftNamePattern = regexp.MustCompile(`NEFT-[A-Z]{4,5}[A-Z0-9]*\d+-([^-]+)-`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -131,8 +137,8 @@ func normalizeBank(raw string) string {
 	return raw
 }
 
-// isValidIMPSName checks if the extracted name is valid (not a status code or payment description)
-func isValidIMPSName(name string) bool {
+// isValidExtractedName checks if the extracted name is valid (not a status code or payment description)
+func isValidExtractedName(name string) bool {
 	name = strings.TrimSpace(name)
 	if len(name) < 2 {
 		return false
@@ -166,7 +172,7 @@ func extractIMPSData(narration string) (names []string, bank string) {
 	// Try MMT/IMPS/ref/OK/name/bank pattern first
 	if matches := impsOKPattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
 		name := strings.TrimSpace(matches[1])
-		if isValidIMPSName(name) {
+		if isValidExtractedName(name) {
 			names = append(names, name)
 		}
 		bank = normalizeBank(matches[2])
@@ -178,10 +184,10 @@ func extractIMPSData(narration string) (names []string, bank string) {
 		name1 := strings.TrimSpace(matches[1])
 		name2 := strings.TrimSpace(matches[2])
 		// Validate that these aren't status codes
-		if isValidIMPSName(name1) && name1 != "OK" {
+		if isValidExtractedName(name1) && name1 != "OK" {
 			names = append(names, name1)
 		}
-		if isValidIMPSName(name2) && name2 != "OK" {
+		if isValidExtractedName(name2) && name2 != "OK" {
 			names = append(names, name2)
 		}
 		bank = normalizeBank(matches[3])
@@ -191,7 +197,7 @@ func extractIMPSData(narration string) (names []string, bank string) {
 	// Try MMT/IMPS/ref/secondary_ref /<name>/<bank> pattern (secondary reference format)
 	if matches := impsSecondaryRefPattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
 		name := strings.TrimSpace(matches[1])
-		if isValidIMPSName(name) {
+		if isValidExtractedName(name) {
 			names = append(names, name)
 		}
 		bank = normalizeBank(matches[2])
@@ -202,10 +208,10 @@ func extractIMPSData(narration string) (names []string, bank string) {
 	if matches := impsP2APattern.FindStringSubmatch(upperNarration); len(matches) > 3 {
 		sender := strings.TrimSpace(matches[1])
 		receiver := strings.TrimSpace(matches[2])
-		if isValidIMPSName(sender) {
+		if isValidExtractedName(sender) {
 			names = append(names, sender)
 		}
-		if isValidIMPSName(receiver) {
+		if isValidExtractedName(receiver) {
 			names = append(names, receiver)
 		}
 		bank = normalizeBank(matches[3])
@@ -215,7 +221,7 @@ func extractIMPSData(narration string) (names []string, bank string) {
 	// Try MMT/IMPS/ref/REQPAY/<name> /<bank> pattern (REQPAY format)
 	if matches := impsREQPAYPattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
 		name := strings.TrimSpace(matches[1])
-		if isValidIMPSName(name) {
+		if isValidExtractedName(name) {
 			names = append(names, name)
 		}
 		bank = normalizeBank(matches[2])
@@ -223,6 +229,20 @@ func extractIMPSData(narration string) (names []string, bank string) {
 	}
 
 	return nil, ""
+}
+
+// extractNEFTName extracts party name from NEFT narrations
+// Format: NEFT-<IFSC_PREFIX><REF>-<NAME>-<rest>
+func extractNEFTName(narration string) string {
+	upperNarration := strings.ToUpper(narration)
+
+	if matches := neftNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
+		name := strings.TrimSpace(matches[1])
+		if isValidExtractedName(name) {
+			return name
+		}
+	}
+	return ""
 }
 
 // Extract extracts all identifiers from a narration string
@@ -409,6 +429,19 @@ func Extract(narration string) []Identifier {
 			identifiers = append(identifiers, Identifier{
 				Type:  TypeBankName,
 				Value: bank,
+			})
+		}
+	}
+
+	// Extract NEFT names
+	neftName := extractNEFTName(narration)
+	if neftName != "" {
+		key := string(TypeNEFTName) + ":" + neftName
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeNEFTName,
+				Value: neftName,
 			})
 		}
 	}

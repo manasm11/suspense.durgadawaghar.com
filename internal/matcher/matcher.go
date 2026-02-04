@@ -34,6 +34,7 @@ const (
 	PhoneWeight         = 0.85
 	AccountNumberWeight = 0.80
 	IMPSNameWeight      = 0.50 // Medium - names can be truncated/similar
+	NEFTNameWeight      = 0.50 // Medium - same as IMPS, names can be truncated
 	BankNameWeight      = 0.20 // Low - many parties use same bank
 )
 
@@ -196,6 +197,8 @@ func calculateConfidence(matches []MatchedIdentifier) float64 {
 			weight = AccountNumberWeight * 100
 		case string(extractor.TypeIMPSName):
 			weight = IMPSNameWeight * 100
+		case string(extractor.TypeNEFTName):
+			weight = NEFTNameWeight * 100
 		case string(extractor.TypeBankName):
 			weight = BankNameWeight * 100
 		default:
@@ -359,11 +362,11 @@ func (m *Matcher) MatchWithBank(ctx context.Context, narration string, bank stri
 
 // matchByNarrationWithBank searches for parties by matching narration patterns filtered by bank
 func (m *Matcher) matchByNarrationWithBank(ctx context.Context, narration string, identifiers []extractor.Identifier, bank string) ([]MatchResult, error) {
-	// Build search patterns from extracted identifiers (e.g., IMPS names)
+	// Build search patterns from extracted identifiers (e.g., IMPS names, NEFT names)
 	var patterns []string
 	for _, id := range identifiers {
-		// Use IMPS names and other identifiers as search patterns
-		if id.Type == extractor.TypeIMPSName {
+		// Use IMPS names and NEFT names as search patterns
+		if id.Type == extractor.TypeIMPSName || id.Type == extractor.TypeNEFTName {
 			patterns = append(patterns, "%"+id.Value+"%")
 		}
 	}
@@ -499,11 +502,11 @@ func (m *Matcher) matchByNarrationWithBank(ctx context.Context, narration string
 // matchByNarration searches for parties by matching narration patterns in transactions
 // This is a fallback when no identifier matches are found
 func (m *Matcher) matchByNarration(ctx context.Context, narration string, identifiers []extractor.Identifier) ([]MatchResult, error) {
-	// Build search patterns from extracted identifiers (e.g., IMPS names)
+	// Build search patterns from extracted identifiers (e.g., IMPS names, NEFT names)
 	var patterns []string
 	for _, id := range identifiers {
-		// Use IMPS names and other identifiers as search patterns
-		if id.Type == extractor.TypeIMPSName {
+		// Use IMPS names and NEFT names as search patterns
+		if id.Type == extractor.TypeIMPSName || id.Type == extractor.TypeNEFTName {
 			patterns = append(patterns, "%"+id.Value+"%")
 		}
 	}

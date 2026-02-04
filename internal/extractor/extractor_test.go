@@ -309,6 +309,80 @@ func TestExtractBankName(t *testing.T) {
 	}
 }
 
+func TestExtractNEFTName(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "NEFT standard format",
+			narration: "NEFT-UCBAN52025040104667985-SHRI SHYAM AGENCY-/FAST/// NEFT-25170210002308-U",
+			want:      []string{"SHRI SHYAM AGENCY"},
+		},
+		{
+			name:      "NEFT BARB format",
+			narration: "NEFT-BARBN52025040226217799-VAIBHAV LAXMI MEDICALSTORE--37100200000337-BARB0",
+			want:      []string{"VAIBHAV LAXMI MEDICALSTORE"},
+		},
+		{
+			name:      "NEFT CNRB format with NA NA",
+			narration: "NEFT-CNRBN52025040237124747-VINAY MEDICAL STORE-NA NA-86551400000375-CNRB000",
+			want:      []string{"VINAY MEDICAL STORE"},
+		},
+		{
+			name:      "NEFT CBIN format with ATTN",
+			narration: "NEFT-CBINN62025040275800299-NEW PALIWAL MEDICAL STORE-//ATTN//-0000000558691",
+			want:      []string{"NEW PALIWAL MEDICAL STORE"},
+		},
+		{
+			name:      "NEFT PUNB format with bank code",
+			narration: "NEFT-PUNBN62025040557735331-CHEAP PHARMA-PNB-0229002100067241-PUNB0022900",
+			want:      []string{"CHEAP PHARMA"},
+		},
+		{
+			name:      "NEFT HDFC format",
+			narration: "NEFT-HDFCN52025041579938340-NARAIN MEDICAL STORE-0001-50200039309108-HDFC000",
+			want:      []string{"NARAIN MEDICAL STORE"},
+		},
+		{
+			name:      "NEFT YES BANK format",
+			narration: "NEFT-YESBN12025040203209954-ONE 97 COMMUNICATIONSLIMITED SETTL--001425000000",
+			want:      []string{"ONE 97 COMMUNICATIONSLIMITED SETTL"},
+		},
+		{
+			name:      "NEFT SBIN format with ATTN and more",
+			narration: "NEFT-SBINN52025040812556593-AMAR MEDICINE AND COSMETICS-/ATTN//INB//PAYMENT",
+			want:      []string{"AMAR MEDICINE AND COSMETICS"},
+		},
+		{
+			name:      "Non-NEFT narration (UPI)",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+		{
+			name:      "Non-NEFT narration (IMPS)",
+			narration: "MMT/IMPS/518211116991/OK/ANURAG SHA/HDFC BANK",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeNEFTName)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestExtractIFSC(t *testing.T) {
 	tests := []struct {
 		name      string
