@@ -69,12 +69,15 @@ var (
 	impsSecondaryRefPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/\d+\s*/([^/]+)/(.+)`)
 	// MMT/IMPS/<ref>/IMPS P2A <sender> /<receiver>/<bank> - P2A (Person to Account) format
 	impsP2APattern = regexp.MustCompile(`MMT/IMPS/\d{12}/IMPS P2A\s+([^/]+?)\s*/([^/]+)/(.+)`)
+	// MMT/IMPS/<ref>/REQPAY/<name> /<bank> - REQPAY format (request payment)
+	impsREQPAYPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/REQPAY/([^/]+?)\s*/(.+)`)
 )
 
 // bankNormalization maps truncated bank names to full names
 var bankNormalization = map[string]string{
 	"UNION BANKOF I": "UNION BANK OF INDIA",
 	"STATE BANK O":   "STATE BANK OF INDIA",
+	"STATE BANK OF I": "STATE BANK OF INDIA",
 	"BANK OF BARO":   "BANK OF BARODA",
 	"PUNJAB NATIO":   "PUNJAB NATIONAL BANK",
 	"CANARA BANK":    "CANARA BANK",
@@ -206,6 +209,16 @@ func extractIMPSData(narration string) (names []string, bank string) {
 			names = append(names, receiver)
 		}
 		bank = normalizeBank(matches[3])
+		return
+	}
+
+	// Try MMT/IMPS/ref/REQPAY/<name> /<bank> pattern (REQPAY format)
+	if matches := impsREQPAYPattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
+		name := strings.TrimSpace(matches[1])
+		if isValidIMPSName(name) {
+			names = append(names, name)
+		}
+		bank = normalizeBank(matches[2])
 		return
 	}
 
