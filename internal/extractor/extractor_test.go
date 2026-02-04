@@ -40,6 +40,11 @@ func TestExtractUPIVPA(t *testing.T) {
 			narration: "UPI/MR MAHESH/SHRIVASMAHESH2/PAYMENT FR/BANK OF BA/464278460653/YBLE6E8037FC",
 			want:      []string{"SHRIVASMAHESH2"},
 		},
+		{
+			name:      "UPI ID first after UPI slash",
+			narration: "UPI/ASHISHKUMARPAND/SHRI RADHEY KRI/BANK OF BARODA/102557916140/HDFA655BF2F2",
+			want:      []string{"ASHISHKUMARPAND"},
+		},
 	}
 
 	for _, tt := range tests {

@@ -44,6 +44,10 @@ var (
 	// Captures the UPI ID (e.g., JAYANTSINGH246 from UPI/JAYANT SIN/JAYANTSINGH246/DURGA/KOTAK MAHI/564648156111/ICI7B61D9D2074F4)
 	upiNarrationPattern4 = regexp.MustCompile(`UPI/[^/]+/([A-Za-z0-9._@-]+)/[^/]+/[^/]+/\d+/`)
 
+	// UPI ID from narration format: UPI/<upi_id>/<name>/<bank>/<ref>/<code>
+	// Captures the UPI ID (e.g., ASHISHKUMARPAND from UPI/ASHISHKUMARPAND/SHRI RADHEY KRI/BANK OF BARODA/102557916140/HDFA655BF2F2)
+	upiNarrationPattern5 = regexp.MustCompile(`UPI/([A-Za-z0-9._@-]+)/[^/]+/[^/]+/\d+/[A-Za-z0-9]+$`)
+
 	// Phone: 10 digits starting with 6-9
 	phonePattern = regexp.MustCompile(`(?:^|[^\d])([6-9]\d{9})(?:[^\d]|$)`)
 
@@ -283,6 +287,22 @@ func Extract(narration string) []Identifier {
 	// Extract UPI IDs from narration format (UPI/<name>/<upi_id>/<other>/<bank>/<ref>/<code>)
 	upiNarrationMatches4 := upiNarrationPattern4.FindAllStringSubmatch(upperNarration, -1)
 	for _, match := range upiNarrationMatches4 {
+		if len(match) > 1 {
+			value := match[1]
+			key := string(TypeUPIVPA) + ":" + value
+			if !seen[key] {
+				seen[key] = true
+				identifiers = append(identifiers, Identifier{
+					Type:  TypeUPIVPA,
+					Value: value,
+				})
+			}
+		}
+	}
+
+	// Extract UPI IDs from narration format (UPI/<upi_id>/<name>/<bank>/<ref>/<code>)
+	upiNarrationMatches5 := upiNarrationPattern5.FindAllStringSubmatch(upperNarration, -1)
+	for _, match := range upiNarrationMatches5 {
 		if len(match) > 1 {
 			value := match[1]
 			key := string(TypeUPIVPA) + ":" + value
