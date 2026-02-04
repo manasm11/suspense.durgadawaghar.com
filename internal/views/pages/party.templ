@@ -70,45 +70,6 @@ templ PartyDetail(party sqlc.GetPartyWithTransactionCountRow, identifiers []sqlc
 	}
 }
 
-templ PartyList(parties []sqlc.GetAllPartiesWithStatsRow) {
-	@views.Layout("All Parties") {
-		<h2>All Parties</h2>
-		<p class="stats">{ fmt.Sprintf("%d", len(parties)) } parties in database</p>
-		if len(parties) > 0 {
-			<table>
-				<thead>
-					<tr>
-						<th>Party Name</th>
-						<th>Location</th>
-						<th>Transactions</th>
-						<th>Total Amount</th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, party := range parties {
-						<tr>
-							<td>
-								<a href={ templ.SafeURL(fmt.Sprintf("/party/%d", party.ID)) }>
-									{ party.Name }
-								</a>
-							</td>
-							<td>
-								if party.Location.Valid {
-									{ party.Location.String }
-								}
-							</td>
-							<td>{ fmt.Sprintf("%d", party.TransactionCount) }</td>
-							<td>₹{ formatAmount(party.TotalAmount) }</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-		} else {
-			<p>No parties in database. <a href="/import">Import some data</a> first.</p>
-		}
-	}
-}
-
 func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -121,15 +82,4 @@ func formatNullFloat(nf sql.NullFloat64) string {
 		return fmt.Sprintf("%.2f", nf.Float64)
 	}
 	return "0.00"
-}
-
-func formatAmount(amount interface{}) string {
-	switch v := amount.(type) {
-	case float64:
-		return fmt.Sprintf("%.2f", v)
-	case int64:
-		return fmt.Sprintf("%.2f", float64(v))
-	default:
-		return "0.00"
-	}
 }

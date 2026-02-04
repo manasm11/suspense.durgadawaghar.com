@@ -247,14 +247,3 @@ func (h *Handler) PartyDetail(w http.ResponseWriter, r *http.Request) {
 	pages.PartyDetail(party, identifiers, transactions).Render(ctx, w)
 }
 
-// PartyList shows all parties
-func (h *Handler) PartyList(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	parties, err := h.queries.GetAllPartiesWithStats(ctx)
-	if err != nil {
-		http.Error(w, "Error loading parties", http.StatusInternalServerError)
-		return
-	}
-
-	pages.PartyList(parties).Render(ctx, w)
-}

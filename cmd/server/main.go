@@ -40,7 +40,6 @@ func main() {
 	mux.HandleFunc("/import/preview", h.ImportPreview)
 	mux.HandleFunc("/import/confirm", h.ImportConfirm)
 	mux.HandleFunc("/party/", h.PartyDetail)
-	mux.HandleFunc("/parties", h.PartyList)
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("Starting server on http://localhost%s", addr)
