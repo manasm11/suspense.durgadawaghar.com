@@ -3,6 +3,7 @@ package pages
 import (
 	"fmt"
 	"suspense.durgadawaghar.com/internal/views"
+	"time"
 )
 
 templ Import() {
@@ -16,7 +17,7 @@ templ Import() {
 			Dec 26 SANDHYA MEDICAL STORE LUCKNOW 5000.00
 			UPI/9450852076@YBL 5000.00
 		</pre>
-		<form hx-post="/import/preview" hx-target="#preview" hx-indicator="#loading">
+		<form hx-post="/import/preview" hx-target="#preview" hx-indicator="#loading" hx-trigger="submit, paste from:#data delay:200ms">
 			<label for="data">Receipt Book Data</label>
 			<textarea
 				id="data"
@@ -24,8 +25,8 @@ templ Import() {
 				placeholder="Paste receipt book data here..."
 				rows="15"
 			></textarea>
-			<label for="year">Year (for transactions without full date)</label>
-			<input type="number" id="year" name="year" value="2025" min="2000" max="2100"/>
+			<label for="year">Year (auto-detected from header if available)</label>
+			<input type="number" id="year" name="year" value={ intToString(time.Now().Year()) } min="2000" max="2100"/>
 			<button type="submit">
 				Preview Import
 				<span id="loading" class="htmx-indicator">Processing...</span>
@@ -35,8 +36,13 @@ templ Import() {
 	}
 }
 
-templ ImportPreview(transactions []PreviewTransaction, rawData string, year int) {
-	<h3>Preview: { len(transactions) } Transactions Found</h3>
+templ ImportPreview(transactions []PreviewTransaction, rawData string, year int, extractedYear int) {
+	<h3>Preview: { intToString(len(transactions)) } Transactions Found</h3>
+	if extractedYear > 0 {
+		<div class="info">
+			Year auto-detected from header: <strong>{ intToString(extractedYear) }</strong>
+		</div>
+	}
 	if len(transactions) == 0 {
 		<div class="error">
 			No valid transactions found. Please check your data format.
