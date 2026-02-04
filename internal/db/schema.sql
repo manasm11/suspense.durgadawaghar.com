@@ -24,9 +24,11 @@ CREATE TABLE transactions (
     transaction_date DATE NOT NULL,
     payment_mode TEXT,
     narration TEXT,
+    bank TEXT NOT NULL DEFAULT 'ICICI',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_identifiers_value ON identifiers(value);
 CREATE INDEX idx_identifiers_type_value ON identifiers(type, value);
 CREATE INDEX idx_transactions_party_id ON transactions(party_id);
+CREATE INDEX idx_transactions_bank ON transactions(bank);

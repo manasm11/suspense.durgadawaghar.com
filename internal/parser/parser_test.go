@@ -131,9 +131,9 @@ func TestParsePartyNameLocation(t *testing.T) {
 	}{
 		{"BABA MEDICAL STORE DELHI", "BABA MEDICAL STORE", "DELHI"},
 		{"SANDHYA MEDICAL LUCKNOW", "SANDHYA MEDICAL", "LUCKNOW"},
-		{"SIMPLE STORE", "SIMPLE STORE", ""},      // STORE is not a location
+		{"SIMPLE STORE", "SIMPLE STORE", ""}, // STORE is not a location
 		{"STORE MUMBAI", "STORE", "MUMBAI"},
-		{"PAYTM BUSINESS", "PAYTM BUSINESS", ""},  // BUSINESS is not a location
+		{"PAYTM BUSINESS", "PAYTM BUSINESS", ""},       // BUSINESS is not a location
 		{"ICICI POS MACHINE", "ICICI POS MACHINE", ""}, // MACHINE is not a location
 	}
 
@@ -323,12 +323,12 @@ func TestIsPartyLine(t *testing.T) {
 	}{
 		{"PANKAJ MEDICAL STOERE KANPUR DEHAT 3780.00", true},
 		{"NIDHI MEDICAL STORE GEHLO 5361.00", true},
-		{"ICICI 192105002017 11145.00", false},                      // Bank account line
+		{"ICICI 192105002017 11145.00", false},                          // Bank account line
 		{"UPI/545843195657/UPI/ALOK7860855471@/PUNJAB NATIONAL", false}, // Narration
-		{"NEFT-BARBN52025040226217799-VAIBHAV LAXMI", false},         // Narration
-		{"BY CASH -KANPUR - BIRHANA ROAD MANISHA", false},            // Narration
-		{"5361.00", false},                                           // Just amount
-		{"STORE", false},                                             // Single word
+		{"NEFT-BARBN52025040226217799-VAIBHAV LAXMI", false},            // Narration
+		{"BY CASH -KANPUR - BIRHANA ROAD MANISHA", false},               // Narration
+		{"5361.00", false}, // Just amount
+		{"STORE", false},   // Single word
 	}
 
 	for _, tt := range tests {

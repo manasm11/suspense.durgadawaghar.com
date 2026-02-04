@@ -62,7 +62,32 @@ func initDB(dbPath string) (*sql.DB, error) {
 		log.Printf("Schema exec (may be already applied): %v", err)
 	}
 
+	// Run migrations for existing databases
+	if err := migrateDB(db); err != nil {
+		return nil, fmt.Errorf("running migrations: %w", err)
+	}
+
 	return db, nil
+}
+
+func migrateDB(db *sql.DB) error {
+	// Check if bank column exists by trying to query it
+	_, err := db.Exec("SELECT bank FROM transactions LIMIT 1")
+	if err != nil {
+		// Column doesn't exist, add it with default ICICI
+		_, err = db.Exec("ALTER TABLE transactions ADD COLUMN bank TEXT NOT NULL DEFAULT 'ICICI'")
+		if err != nil {
+			return fmt.Errorf("adding bank column: %w", err)
+		}
+		log.Printf("Migration: Added bank column, existing records set to ICICI")
+
+		// Create index for bank column
+		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_transactions_bank ON transactions(bank)")
+		if err != nil {
+			log.Printf("Migration: Warning - could not create bank index: %v", err)
+		}
+	}
+	return nil
 }
 
 const schemaSQL = `
@@ -78,7 +103,7 @@ CREATE TABLE IF NOT EXISTS parties (
 CREATE TABLE IF NOT EXISTS identifiers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     party_id INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
-    type TEXT NOT NULL CHECK (type IN ('upi_vpa', 'phone', 'account_number', 'ifsc')),
+    type TEXT NOT NULL CHECK (type IN ('upi_vpa', 'phone', 'account_number', 'ifsc', 'imps_name', 'bank_name')),
     value TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(type, value)
@@ -92,10 +117,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     transaction_date DATE NOT NULL,
     payment_mode TEXT,
     narration TEXT,
+    bank TEXT NOT NULL DEFAULT 'ICICI',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_identifiers_value ON identifiers(value);
 CREATE INDEX IF NOT EXISTS idx_identifiers_type_value ON identifiers(type, value);
 CREATE INDEX IF NOT EXISTS idx_transactions_party_id ON transactions(party_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_bank ON transactions(bank);
 `

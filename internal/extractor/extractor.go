@@ -13,8 +13,8 @@ const (
 	TypePhone         IdentifierType = "phone"
 	TypeAccountNumber IdentifierType = "account_number"
 	TypeIFSC          IdentifierType = "ifsc"
-	TypeIMPSName      IdentifierType = "imps_name"  // Sender/receiver name from IMPS
-	TypeBankName      IdentifierType = "bank_name"  // Bank name from IMPS
+	TypeIMPSName      IdentifierType = "imps_name" // Sender/receiver name from IMPS
+	TypeBankName      IdentifierType = "bank_name" // Bank name from IMPS
 )
 
 // Identifier represents an extracted identifier from a narration
@@ -69,43 +69,43 @@ var (
 
 // bankNormalization maps truncated bank names to full names
 var bankNormalization = map[string]string{
-	"UNION BANKOF I":    "UNION BANK OF INDIA",
-	"STATE BANK O":      "STATE BANK OF INDIA",
-	"BANK OF BARO":      "BANK OF BARODA",
-	"PUNJAB NATIO":      "PUNJAB NATIONAL BANK",
-	"CANARA BANK":       "CANARA BANK",
-	"HDFC BANK":         "HDFC BANK",
-	"ICICI BANK":        "ICICI BANK",
-	"AXIS BANK":         "AXIS BANK",
-	"KOTAK MAHIND":      "KOTAK MAHINDRA BANK",
-	"INDUSIND BAN":      "INDUSIND BANK",
-	"YES BANK":          "YES BANK",
-	"IDBI BANK":         "IDBI BANK",
-	"CENTRAL BANK":      "CENTRAL BANK OF INDIA",
-	"INDIAN BANK":       "INDIAN BANK",
-	"INDIAN OVERS":      "INDIAN OVERSEAS BANK",
-	"UCO BANK":          "UCO BANK",
-	"BANK OF INDI":      "BANK OF INDIA",
-	"SYNDICATE BA":      "SYNDICATE BANK",
-	"ALLAHABAD BA":      "ALLAHABAD BANK",
-	"CORPORATION":       "CORPORATION BANK",
-	"ORIENTAL BAN":      "ORIENTAL BANK OF COMMERCE",
-	"UNITED BANK":       "UNITED BANK OF INDIA",
-	"DENA BANK":         "DENA BANK",
-	"VIJAYA BANK":       "VIJAYA BANK",
-	"FEDERAL BANK":      "FEDERAL BANK",
-	"SOUTH INDIAN":      "SOUTH INDIAN BANK",
-	"KARNATAKA BA":      "KARNATAKA BANK",
-	"BANDHAN BANK":      "BANDHAN BANK",
-	"RBL BANK":          "RBL BANK",
-	"IDFC FIRST B":      "IDFC FIRST BANK",
-	"AU SMALL FIN":      "AU SMALL FINANCE BANK",
-	"EQUITAS SMAL":      "EQUITAS SMALL FINANCE BANK",
-	"UJJIVAN SMAL":      "UJJIVAN SMALL FINANCE BANK",
-	"PAYTM PAYMEN":      "PAYTM PAYMENTS BANK",
-	"AIRTEL PAYME":      "AIRTEL PAYMENTS BANK",
-	"FINO PAYMENT":      "FINO PAYMENTS BANK",
-	"JIOPAYMENTSB":      "JIO PAYMENTS BANK",
+	"UNION BANKOF I": "UNION BANK OF INDIA",
+	"STATE BANK O":   "STATE BANK OF INDIA",
+	"BANK OF BARO":   "BANK OF BARODA",
+	"PUNJAB NATIO":   "PUNJAB NATIONAL BANK",
+	"CANARA BANK":    "CANARA BANK",
+	"HDFC BANK":      "HDFC BANK",
+	"ICICI BANK":     "ICICI BANK",
+	"AXIS BANK":      "AXIS BANK",
+	"KOTAK MAHIND":   "KOTAK MAHINDRA BANK",
+	"INDUSIND BAN":   "INDUSIND BANK",
+	"YES BANK":       "YES BANK",
+	"IDBI BANK":      "IDBI BANK",
+	"CENTRAL BANK":   "CENTRAL BANK OF INDIA",
+	"INDIAN BANK":    "INDIAN BANK",
+	"INDIAN OVERS":   "INDIAN OVERSEAS BANK",
+	"UCO BANK":       "UCO BANK",
+	"BANK OF INDI":   "BANK OF INDIA",
+	"SYNDICATE BA":   "SYNDICATE BANK",
+	"ALLAHABAD BA":   "ALLAHABAD BANK",
+	"CORPORATION":    "CORPORATION BANK",
+	"ORIENTAL BAN":   "ORIENTAL BANK OF COMMERCE",
+	"UNITED BANK":    "UNITED BANK OF INDIA",
+	"DENA BANK":      "DENA BANK",
+	"VIJAYA BANK":    "VIJAYA BANK",
+	"FEDERAL BANK":   "FEDERAL BANK",
+	"SOUTH INDIAN":   "SOUTH INDIAN BANK",
+	"KARNATAKA BA":   "KARNATAKA BANK",
+	"BANDHAN BANK":   "BANDHAN BANK",
+	"RBL BANK":       "RBL BANK",
+	"IDFC FIRST B":   "IDFC FIRST BANK",
+	"AU SMALL FIN":   "AU SMALL FINANCE BANK",
+	"EQUITAS SMAL":   "EQUITAS SMALL FINANCE BANK",
+	"UJJIVAN SMAL":   "UJJIVAN SMALL FINANCE BANK",
+	"PAYTM PAYMEN":   "PAYTM PAYMENTS BANK",
+	"AIRTEL PAYME":   "AIRTEL PAYMENTS BANK",
+	"FINO PAYMENT":   "FINO PAYMENTS BANK",
+	"JIOPAYMENTSB":   "JIO PAYMENTS BANK",
 }
 
 // normalizeBank normalizes truncated bank names to full names

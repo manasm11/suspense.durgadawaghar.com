@@ -199,6 +199,222 @@ func (m *Matcher) MatchSingle(ctx context.Context, narration string) (*MatchResu
 	return &results[0], nil
 }
 
+// MatchWithBank finds parties matching the given narration filtered by bank
+func (m *Matcher) MatchWithBank(ctx context.Context, narration string, bank string) ([]MatchResult, error) {
+	// Extract identifiers from the narration
+	identifiers := extractor.Extract(narration)
+
+	var matches []sqlc.FindPartiesByIdentifierValuesAndBankRow
+
+	// Only try identifier matching if we have identifiers
+	if len(identifiers) > 0 {
+		// Get unique values for database query
+		values := make([]string, len(identifiers))
+		for i, id := range identifiers {
+			values[i] = id.Value
+		}
+
+		// Query database for matching parties filtered by bank
+		var err error
+		matches, err = m.queries.FindPartiesByIdentifierValuesAndBank(ctx, sqlc.FindPartiesByIdentifierValuesAndBankParams{
+			Values: values,
+			Bank:   bank,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// If no identifier matches found, try fallback narration search
+	if len(matches) == 0 {
+		return m.matchByNarrationWithBank(ctx, narration, identifiers, bank)
+	}
+
+	// Group matches by party ID and calculate scores
+	partyMatches := make(map[int64]*MatchResult)
+
+	for _, match := range matches {
+		result, exists := partyMatches[match.ID]
+		if !exists {
+			result = &MatchResult{
+				Party: sqlc.Party{
+					ID:        match.ID,
+					Name:      match.Name,
+					Location:  match.Location,
+					CreatedAt: match.CreatedAt,
+				},
+				Confidence: 0,
+				MatchedOn:  []MatchedIdentifier{},
+			}
+			partyMatches[match.ID] = result
+		}
+
+		// Add matched identifier
+		result.MatchedOn = append(result.MatchedOn, MatchedIdentifier{
+			Type:  match.MatchType,
+			Value: match.MatchValue,
+		})
+	}
+
+	// Calculate confidence scores and fetch transaction stats
+	results := make([]MatchResult, 0, len(partyMatches))
+
+	for _, result := range partyMatches {
+		// Calculate base confidence from identifier matches
+		result.Confidence = calculateConfidence(result.MatchedOn)
+
+		// Get transaction stats for this bank
+		stats, err := m.queries.GetPartyWithTransactionCountByBank(ctx, sqlc.GetPartyWithTransactionCountByBankParams{
+			Bank: bank,
+			ID:   result.Party.ID,
+		})
+		if err == nil {
+			result.TransactionCount = stats.TransactionCount
+			if amount, ok := stats.TotalAmount.(float64); ok {
+				result.TotalAmount = amount
+			}
+
+			// Apply history boost: 1.0 + log10(tx_count) * 0.1
+			if stats.TransactionCount > 0 {
+				historyBoost := 1.0 + math.Log10(float64(stats.TransactionCount))*0.1
+				result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			}
+		}
+
+		// Get recent transactions for this bank (limit 5)
+		recentTxns, err := m.queries.GetRecentTransactionsByPartyIDAndBank(ctx, sqlc.GetRecentTransactionsByPartyIDAndBankParams{
+			PartyID: result.Party.ID,
+			Bank:    bank,
+			Limit:   5,
+		})
+		if err == nil {
+			result.RecentTxns = recentTxns
+		}
+
+		results = append(results, *result)
+	}
+
+	// Sort by confidence (descending)
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Confidence > results[j].Confidence
+	})
+
+	return results, nil
+}
+
+// matchByNarrationWithBank searches for parties by matching narration patterns filtered by bank
+func (m *Matcher) matchByNarrationWithBank(ctx context.Context, narration string, identifiers []extractor.Identifier, bank string) ([]MatchResult, error) {
+	// Build search patterns from extracted identifiers (e.g., IMPS names)
+	var patterns []string
+	for _, id := range identifiers {
+		// Use IMPS names and other identifiers as search patterns
+		if id.Type == extractor.TypeIMPSName {
+			patterns = append(patterns, "%"+id.Value+"%")
+		}
+	}
+
+	// If no good patterns, try to extract key parts from the narration itself
+	if len(patterns) == 0 {
+		// Extract the IMPS reference pattern if present (e.g., MMT/IMPS/529816026379)
+		if strings.Contains(strings.ToUpper(narration), "MMT/IMPS/") {
+			parts := strings.Split(narration, "/")
+			for _, part := range parts {
+				// Look for 12-digit IMPS reference numbers
+				part = strings.TrimSpace(part)
+				if len(part) == 12 {
+					allDigits := true
+					for _, c := range part {
+						if c < '0' || c > '9' {
+							allDigits = false
+							break
+						}
+					}
+					if allDigits {
+						patterns = append(patterns, "%"+part+"%")
+					}
+				}
+			}
+		}
+	}
+
+	if len(patterns) == 0 {
+		return nil, nil
+	}
+
+	// Query for each pattern and collect results
+	partyMatches := make(map[int64]*MatchResult)
+
+	for _, pattern := range patterns {
+		matches, err := m.queries.FindPartiesByNarrationPatternAndBank(ctx, sqlc.FindPartiesByNarrationPatternAndBankParams{
+			Narration: sql.NullString{String: pattern, Valid: true},
+			Bank:      bank,
+		})
+		if err != nil {
+			continue
+		}
+
+		for _, match := range matches {
+			if _, exists := partyMatches[match.ID]; !exists {
+				partyMatches[match.ID] = &MatchResult{
+					Party: sqlc.Party{
+						ID:        match.ID,
+						Name:      match.Name,
+						Location:  match.Location,
+						CreatedAt: match.CreatedAt,
+					},
+					Confidence: 40, // Lower confidence for narration-based matches
+					MatchedOn: []MatchedIdentifier{{
+						Type:  "narration",
+						Value: strings.TrimPrefix(strings.TrimSuffix(pattern, "%"), "%"),
+					}},
+				}
+			}
+		}
+	}
+
+	// Calculate final scores and fetch stats
+	results := make([]MatchResult, 0, len(partyMatches))
+
+	for _, result := range partyMatches {
+		// Get transaction stats for this bank
+		stats, err := m.queries.GetPartyWithTransactionCountByBank(ctx, sqlc.GetPartyWithTransactionCountByBankParams{
+			Bank: bank,
+			ID:   result.Party.ID,
+		})
+		if err == nil {
+			result.TransactionCount = stats.TransactionCount
+			if amount, ok := stats.TotalAmount.(float64); ok {
+				result.TotalAmount = amount
+			}
+
+			// Apply history boost
+			if stats.TransactionCount > 0 {
+				historyBoost := 1.0 + math.Log10(float64(stats.TransactionCount))*0.1
+				result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			}
+		}
+
+		// Get recent transactions for this bank
+		recentTxns, err := m.queries.GetRecentTransactionsByPartyIDAndBank(ctx, sqlc.GetRecentTransactionsByPartyIDAndBankParams{
+			PartyID: result.Party.ID,
+			Bank:    bank,
+			Limit:   5,
+		})
+		if err == nil {
+			result.RecentTxns = recentTxns
+		}
+
+		results = append(results, *result)
+	}
+
+	// Sort by confidence (descending)
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Confidence > results[j].Confidence
+	})
+
+	return results, nil
+}
+
 // matchByNarration searches for parties by matching narration patterns in transactions
 // This is a fallback when no identifier matches are found
 func (m *Matcher) matchByNarration(ctx context.Context, narration string, identifiers []extractor.Identifier) ([]MatchResult, error) {

@@ -15,7 +15,6 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 		</div>
 	} else {
 		<h3>{ fmt.Sprintf("%d", len(results)) } { pluralMatch(len(results)) } Found</h3>
-
 		for _, result := range results {
 			<div class="result-card">
 				<h3>
@@ -24,26 +23,22 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 						<span class="location">({ result.Party.Location.String })</span>
 					}
 				</h3>
-
 				<p>
 					<strong>Confidence: </strong>
 					<span class={ confidenceClass(result.Confidence) }>
 						{ fmt.Sprintf("%.1f%%", result.Confidence) }
 					</span>
 				</p>
-
 				<p>
 					<strong>Matched on: </strong>
 					for _, m := range result.MatchedOn {
 						<span class={ "match-badge", m.Type }>{ m.Type }: { m.Value }</span>
 					}
 				</p>
-
 				<p class="stats">
 					<strong>History:</strong> { fmt.Sprintf("%d", result.TransactionCount) } transactions,
 					Total: ₹{ fmt.Sprintf("%.2f", result.TotalAmount) }
 				</p>
-
 				if len(result.RecentTxns) > 0 {
 					<details>
 						<summary>Recent Transactions ({ fmt.Sprintf("%d", len(result.RecentTxns)) })</summary>
@@ -52,6 +47,7 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 								<tr>
 									<th>Date</th>
 									<th>Amount</th>
+									<th>Bank</th>
 									<th>Mode</th>
 								</tr>
 							</thead>
@@ -60,6 +56,7 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 									<tr>
 										<td>{ txn.TransactionDate.Format("02 Jan 2006") }</td>
 										<td>₹{ fmt.Sprintf("%.2f", txn.Amount) }</td>
+										<td>{ txn.Bank }</td>
 										<td>{ txn.PaymentMode.String }</td>
 									</tr>
 								}
@@ -67,7 +64,6 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 						</table>
 					</details>
 				}
-
 				<p>
 					<a href={ templ.SafeURL(fmt.Sprintf("/party/%d", result.Party.ID)) }>View Full Details →</a>
 				</p>

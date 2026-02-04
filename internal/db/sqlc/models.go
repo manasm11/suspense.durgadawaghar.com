@@ -31,5 +31,6 @@ type Transaction struct {
 	TransactionDate time.Time
 	PaymentMode     sql.NullString
 	Narration       sql.NullString
+	Bank            string
 	CreatedAt       sql.NullTime
 }

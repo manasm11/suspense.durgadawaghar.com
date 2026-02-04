@@ -15,6 +15,7 @@ type Transaction struct {
 	Amount      float64
 	Narration   string // Combined bank account info and payment details
 	PaymentMode string
+	Bank        string // Receiving bank (ICICI, HDFC, etc.)
 }
 
 var (
@@ -31,24 +32,24 @@ var (
 	// Lines to skip
 	skipPatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)^SUB\s+TOTAL`),
-		regexp.MustCompile(`(?i)Continued\.\.`),                        // Continued..2, Continued..3, etc.
+		regexp.MustCompile(`(?i)Continued\.\.`), // Continued..2, Continued..3, etc.
 		regexp.MustCompile(`(?i)^SUSPENSE\s+A/C`),
 		regexp.MustCompile(`(?i)^\s*$`),
-		regexp.MustCompile(`^-+$`),                                    // Separator lines (-----)
-		regexp.MustCompile(`^=+$`),                                    // Separator lines (=====)
-		regexp.MustCompile(`(?i)^TOTAL\s+[\d,.]+\s+[\d,.]+$`),         // Total line
-		regexp.MustCompile(`(?i)^\*\*\*.*\*\*\*$`),                    // *** End of Report ***
-		regexp.MustCompile(`(?i)^DATE\s+PARTICULARS\s+DEBIT\s+CREDIT`), // Header line
-		regexp.MustCompile(`(?i)^RECEIPT\s+BOOK`),                     // Receipt book header
-		regexp.MustCompile(`(?i)^DURGA\s+DAWA\s+GHAR`),                // Company name header
+		regexp.MustCompile(`^-+$`),                                           // Separator lines (-----)
+		regexp.MustCompile(`^=+$`),                                           // Separator lines (=====)
+		regexp.MustCompile(`(?i)^TOTAL\s+[\d,.]+\s+[\d,.]+$`),                // Total line
+		regexp.MustCompile(`(?i)^\*\*\*.*\*\*\*$`),                           // *** End of Report ***
+		regexp.MustCompile(`(?i)^DATE\s+PARTICULARS\s+DEBIT\s+CREDIT`),       // Header line
+		regexp.MustCompile(`(?i)^RECEIPT\s+BOOK`),                            // Receipt book header
+		regexp.MustCompile(`(?i)^DURGA\s+DAWA\s+GHAR`),                       // Company name header
 		regexp.MustCompile(`(?i)^\d{2}-\d{2}-\d{4}\s+-\s+\d{2}-\d{2}-\d{4}`), // Date range header (with optional page number)
-		regexp.MustCompile(`(?i)^E-Mail\s*:`),                         // Email line
-		regexp.MustCompile(`(?i)^D\.?L\.?\s*No\.?\s*:`),               // DL number line
-		regexp.MustCompile(`(?i)^GSTIN\s*:`),                          // GSTIN line
-		regexp.MustCompile(`(?i)^\d+/\d+,`),                           // Address line (60/33,...)
-		regexp.MustCompile(`(?i)^Page\s+No\.`),                        // Page number line
-		regexp.MustCompile(`^\d+(\.\d{2})?\s+\d+(\.\d{2})?$`),         // Balance lines (75901.00 75901.00)
-		regexp.MustCompile(`^,`),                                      // Invoice ref continuation (,DDG)
+		regexp.MustCompile(`(?i)^E-Mail\s*:`),                                // Email line
+		regexp.MustCompile(`(?i)^D\.?L\.?\s*No\.?\s*:`),                      // DL number line
+		regexp.MustCompile(`(?i)^GSTIN\s*:`),                                 // GSTIN line
+		regexp.MustCompile(`(?i)^\d+/\d+,`),                                  // Address line (60/33,...)
+		regexp.MustCompile(`(?i)^Page\s+No\.`),                               // Page number line
+		regexp.MustCompile(`^\d+(\.\d{2})?\s+\d+(\.\d{2})?$`),                // Balance lines (75901.00 75901.00)
+		regexp.MustCompile(`^,`),                                             // Invoice ref continuation (,DDG)
 	}
 
 	// Payment mode detection patterns
@@ -107,6 +108,9 @@ func Parse(text string, year int) []Transaction {
 			if currentTx != nil {
 				currentTx.Narration = buildNarration(narrationLines)
 				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
+				if currentTx.Bank == "" {
+					currentTx.Bank = "ICICI" // Default bank
+				}
 				transactions = append(transactions, *currentTx)
 			}
 
@@ -123,6 +127,10 @@ func Parse(text string, year int) []Transaction {
 		} else if currentTx != nil {
 			// Check if this is a bank account line (should be added to narration)
 			if bankAccountPattern.MatchString(line) {
+				// Extract bank name from the bank account line
+				if match := bankAccountPattern.FindStringSubmatch(line); match != nil && currentTx.Bank == "" {
+					currentTx.Bank = strings.ToUpper(match[1])
+				}
 				cleanLine := invoiceRefPattern.ReplaceAllString(line, "")
 				cleanLine = strings.TrimSpace(cleanLine)
 				if cleanLine != "" {
@@ -136,6 +144,9 @@ func Parse(text string, year int) []Transaction {
 				// Save current transaction
 				currentTx.Narration = buildNarration(narrationLines)
 				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
+				if currentTx.Bank == "" {
+					currentTx.Bank = "ICICI" // Default bank
+				}
 				transactions = append(transactions, *currentTx)
 
 				// Create new transaction with inherited date
@@ -164,6 +175,9 @@ func Parse(text string, year int) []Transaction {
 	if currentTx != nil {
 		currentTx.Narration = buildNarration(narrationLines)
 		currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
+		if currentTx.Bank == "" {
+			currentTx.Bank = "ICICI" // Default bank
+		}
 		transactions = append(transactions, *currentTx)
 	}
 

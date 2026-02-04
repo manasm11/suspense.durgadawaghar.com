@@ -48,12 +48,18 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	narration := r.FormValue("narration")
+	bank := r.FormValue("bank")
+
+	if bank == "" {
+		w.Write([]byte(`<div class="error">Please select a bank.</div>`))
+		return
+	}
 	if narration == "" {
 		w.Write([]byte(`<div class="error">Please enter a narration to search.</div>`))
 		return
 	}
 
-	results, err := h.matcher.Match(r.Context(), narration)
+	results, err := h.matcher.MatchWithBank(r.Context(), narration, bank)
 	if err != nil {
 		w.Write([]byte(fmt.Sprintf(`<div class="error">Search error: %s</div>`, err.Error())))
 		return
@@ -105,6 +111,7 @@ func (h *Handler) ImportPreview(w http.ResponseWriter, r *http.Request) {
 			Location:    tx.Location,
 			Amount:      fmt.Sprintf("%.2f", tx.Amount),
 			PaymentMode: tx.PaymentMode,
+			Bank:        tx.Bank,
 			Identifiers: previewIDs,
 		}
 	}
@@ -195,6 +202,7 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 		TransactionDate: tx.Date,
 		PaymentMode:     sql.NullString{String: tx.PaymentMode, Valid: tx.PaymentMode != ""},
 		Narration:       sql.NullString{String: tx.Narration, Valid: tx.Narration != ""},
+		Bank:            tx.Bank,
 	})
 	if err != nil {
 		return fmt.Errorf("creating transaction: %w", err)

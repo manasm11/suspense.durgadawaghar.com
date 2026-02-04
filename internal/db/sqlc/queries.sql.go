@@ -73,9 +73,9 @@ func (q *Queries) CreateParty(ctx context.Context, arg CreatePartyParams) (Party
 }
 
 const createTransaction = `-- name: CreateTransaction :one
-INSERT INTO transactions (party_id, amount, transaction_date, payment_mode, narration)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, party_id, amount, transaction_date, payment_mode, narration, created_at
+INSERT INTO transactions (party_id, amount, transaction_date, payment_mode, narration, bank)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, party_id, amount, transaction_date, payment_mode, narration, bank, created_at
 `
 
 type CreateTransactionParams struct {
@@ -84,6 +84,7 @@ type CreateTransactionParams struct {
 	TransactionDate time.Time
 	PaymentMode     sql.NullString
 	Narration       sql.NullString
+	Bank            string
 }
 
 func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error) {
@@ -93,6 +94,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		arg.TransactionDate,
 		arg.PaymentMode,
 		arg.Narration,
+		arg.Bank,
 	)
 	var i Transaction
 	err := row.Scan(
@@ -102,6 +104,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.TransactionDate,
 		&i.PaymentMode,
 		&i.Narration,
+		&i.Bank,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -209,6 +212,69 @@ func (q *Queries) FindPartiesByIdentifierValues(ctx context.Context, values []st
 	return items, nil
 }
 
+const findPartiesByIdentifierValuesAndBank = `-- name: FindPartiesByIdentifierValuesAndBank :many
+SELECT DISTINCT p.id, p.name, p.location, p.created_at, i.type as match_type, i.value as match_value
+FROM parties p
+JOIN identifiers i ON p.id = i.party_id
+JOIN transactions t ON p.id = t.party_id
+WHERE i.value IN (/*SLICE:values*/?) AND t.bank = ?
+`
+
+type FindPartiesByIdentifierValuesAndBankParams struct {
+	Values []string
+	Bank   string
+}
+
+type FindPartiesByIdentifierValuesAndBankRow struct {
+	ID         int64
+	Name       string
+	Location   sql.NullString
+	CreatedAt  sql.NullTime
+	MatchType  string
+	MatchValue string
+}
+
+func (q *Queries) FindPartiesByIdentifierValuesAndBank(ctx context.Context, arg FindPartiesByIdentifierValuesAndBankParams) ([]FindPartiesByIdentifierValuesAndBankRow, error) {
+	query := findPartiesByIdentifierValuesAndBank
+	var queryParams []interface{}
+	if len(arg.Values) > 0 {
+		for _, v := range arg.Values {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:values*/?", strings.Repeat(",?", len(arg.Values))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:values*/?", "NULL", 1)
+	}
+	queryParams = append(queryParams, arg.Bank)
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindPartiesByIdentifierValuesAndBankRow
+	for rows.Next() {
+		var i FindPartiesByIdentifierValuesAndBankRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Location,
+			&i.CreatedAt,
+			&i.MatchType,
+			&i.MatchValue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findPartiesByNarrationPattern = `-- name: FindPartiesByNarrationPattern :many
 SELECT DISTINCT p.id, p.name, p.location, p.created_at, t.narration as match_narration
 FROM parties p
@@ -234,6 +300,56 @@ func (q *Queries) FindPartiesByNarrationPattern(ctx context.Context, narration s
 	var items []FindPartiesByNarrationPatternRow
 	for rows.Next() {
 		var i FindPartiesByNarrationPatternRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Location,
+			&i.CreatedAt,
+			&i.MatchNarration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findPartiesByNarrationPatternAndBank = `-- name: FindPartiesByNarrationPatternAndBank :many
+SELECT DISTINCT p.id, p.name, p.location, p.created_at, t.narration as match_narration
+FROM parties p
+JOIN transactions t ON p.id = t.party_id
+WHERE t.narration LIKE ? AND t.bank = ?
+LIMIT 50
+`
+
+type FindPartiesByNarrationPatternAndBankParams struct {
+	Narration sql.NullString
+	Bank      string
+}
+
+type FindPartiesByNarrationPatternAndBankRow struct {
+	ID             int64
+	Name           string
+	Location       sql.NullString
+	CreatedAt      sql.NullTime
+	MatchNarration sql.NullString
+}
+
+func (q *Queries) FindPartiesByNarrationPatternAndBank(ctx context.Context, arg FindPartiesByNarrationPatternAndBankParams) ([]FindPartiesByNarrationPatternAndBankRow, error) {
+	rows, err := q.db.QueryContext(ctx, findPartiesByNarrationPatternAndBank, arg.Narration, arg.Bank)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindPartiesByNarrationPatternAndBankRow
+	for rows.Next() {
+		var i FindPartiesByNarrationPatternAndBankRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -419,8 +535,44 @@ func (q *Queries) GetPartyWithTransactionCount(ctx context.Context, id int64) (G
 	return i, err
 }
 
+const getPartyWithTransactionCountByBank = `-- name: GetPartyWithTransactionCountByBank :one
+SELECT p.id, p.name, p.location, p.created_at, COUNT(t.id) as transaction_count, COALESCE(SUM(t.amount), 0) as total_amount
+FROM parties p
+LEFT JOIN transactions t ON p.id = t.party_id AND t.bank = ?
+WHERE p.id = ?
+GROUP BY p.id
+`
+
+type GetPartyWithTransactionCountByBankParams struct {
+	Bank string
+	ID   int64
+}
+
+type GetPartyWithTransactionCountByBankRow struct {
+	ID               int64
+	Name             string
+	Location         sql.NullString
+	CreatedAt        sql.NullTime
+	TransactionCount int64
+	TotalAmount      interface{}
+}
+
+func (q *Queries) GetPartyWithTransactionCountByBank(ctx context.Context, arg GetPartyWithTransactionCountByBankParams) (GetPartyWithTransactionCountByBankRow, error) {
+	row := q.db.QueryRowContext(ctx, getPartyWithTransactionCountByBank, arg.Bank, arg.ID)
+	var i GetPartyWithTransactionCountByBankRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Location,
+		&i.CreatedAt,
+		&i.TransactionCount,
+		&i.TotalAmount,
+	)
+	return i, err
+}
+
 const getRecentTransactionsByPartyID = `-- name: GetRecentTransactionsByPartyID :many
-SELECT id, party_id, amount, transaction_date, payment_mode, narration, created_at FROM transactions
+SELECT id, party_id, amount, transaction_date, payment_mode, narration, bank, created_at FROM transactions
 WHERE party_id = ?
 ORDER BY transaction_date DESC
 LIMIT ?
@@ -447,6 +599,52 @@ func (q *Queries) GetRecentTransactionsByPartyID(ctx context.Context, arg GetRec
 			&i.TransactionDate,
 			&i.PaymentMode,
 			&i.Narration,
+			&i.Bank,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRecentTransactionsByPartyIDAndBank = `-- name: GetRecentTransactionsByPartyIDAndBank :many
+SELECT id, party_id, amount, transaction_date, payment_mode, narration, bank, created_at FROM transactions
+WHERE party_id = ? AND bank = ?
+ORDER BY transaction_date DESC
+LIMIT ?
+`
+
+type GetRecentTransactionsByPartyIDAndBankParams struct {
+	PartyID int64
+	Bank    string
+	Limit   int64
+}
+
+func (q *Queries) GetRecentTransactionsByPartyIDAndBank(ctx context.Context, arg GetRecentTransactionsByPartyIDAndBankParams) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, getRecentTransactionsByPartyIDAndBank, arg.PartyID, arg.Bank, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transaction
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.PartyID,
+			&i.Amount,
+			&i.TransactionDate,
+			&i.PaymentMode,
+			&i.Narration,
+			&i.Bank,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -463,7 +661,7 @@ func (q *Queries) GetRecentTransactionsByPartyID(ctx context.Context, arg GetRec
 }
 
 const getTransactionsByPartyID = `-- name: GetTransactionsByPartyID :many
-SELECT id, party_id, amount, transaction_date, payment_mode, narration, created_at FROM transactions
+SELECT id, party_id, amount, transaction_date, payment_mode, narration, bank, created_at FROM transactions
 WHERE party_id = ?
 ORDER BY transaction_date DESC
 `
@@ -484,6 +682,7 @@ func (q *Queries) GetTransactionsByPartyID(ctx context.Context, partyID int64) (
 			&i.TransactionDate,
 			&i.PaymentMode,
 			&i.Narration,
+			&i.Bank,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

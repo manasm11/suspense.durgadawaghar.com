@@ -10,14 +10,12 @@ templ Import() {
 		<h2>Import Receipt Book Data</h2>
 		<p>Paste your receipt book data below. The parser expects the following format:</p>
 		<pre>
-Dec 26 BABA MEDICAL AND GENERAL STOR SHAMBHUA 11744.00
-ICICI 192105002017 11744.00
-Chq.704339 Dt. 26-12-2025 Ag. DDG024782
-
-Dec 26 SANDHYA MEDICAL STORE LUCKNOW 5000.00
-UPI/9450852076@YBL 5000.00
-</pre>
-
+			Dec 26 BABA MEDICAL AND GENERAL STOR SHAMBHUA 11744.00
+			ICICI 192105002017 11744.00
+			Chq.704339 Dt. 26-12-2025 Ag. DDG024782
+			Dec 26 SANDHYA MEDICAL STORE LUCKNOW 5000.00
+			UPI/9450852076@YBL 5000.00
+		</pre>
 		<form hx-post="/import/preview" hx-target="#preview" hx-indicator="#loading">
 			<label for="data">Receipt Book Data</label>
 			<textarea
@@ -26,23 +24,19 @@ UPI/9450852076@YBL 5000.00
 				placeholder="Paste receipt book data here..."
 				rows="15"
 			></textarea>
-
 			<label for="year">Year (for transactions without full date)</label>
 			<input type="number" id="year" name="year" value="2025" min="2000" max="2100"/>
-
 			<button type="submit">
 				Preview Import
-				<span id="loading" class="htmx-indicator"> Processing...</span>
+				<span id="loading" class="htmx-indicator">Processing...</span>
 			</button>
 		</form>
-
 		<div id="preview"></div>
 	}
 }
 
 templ ImportPreview(transactions []PreviewTransaction, rawData string, year int) {
 	<h3>Preview: { len(transactions) } Transactions Found</h3>
-
 	if len(transactions) == 0 {
 		<div class="error">
 			No valid transactions found. Please check your data format.
@@ -56,6 +50,7 @@ templ ImportPreview(transactions []PreviewTransaction, rawData string, year int)
 						<th>Party Name</th>
 						<th>Location</th>
 						<th>Amount</th>
+						<th>Bank</th>
 						<th>Payment Mode</th>
 						<th>Identifiers Found</th>
 					</tr>
@@ -67,6 +62,7 @@ templ ImportPreview(transactions []PreviewTransaction, rawData string, year int)
 							<td>{ tx.PartyName }</td>
 							<td>{ tx.Location }</td>
 							<td>{ tx.Amount }</td>
+							<td>{ tx.Bank }</td>
 							<td>{ tx.PaymentMode }</td>
 							<td>
 								for _, id := range tx.Identifiers {
@@ -81,13 +77,12 @@ templ ImportPreview(transactions []PreviewTransaction, rawData string, year int)
 				</tbody>
 			</table>
 		</div>
-
 		<form hx-post="/import/confirm" hx-target="#preview" hx-indicator="#confirming">
 			<input type="hidden" name="data" value={ rawData }/>
 			<input type="hidden" name="year" value={ intToString(year) }/>
 			<button type="submit">
 				Confirm Import
-				<span id="confirming" class="htmx-indicator"> Importing...</span>
+				<span id="confirming" class="htmx-indicator">Importing...</span>
 			</button>
 		</form>
 	}
@@ -104,13 +99,13 @@ templ ImportResult(imported int, skipped int, errors []string) {
 			</ul>
 		</div>
 	}
-
 	<div class="success">
 		<h4>Import Complete</h4>
 		<p>
 			<strong>{ intToString(imported) }</strong> transactions imported successfully.
 			if skipped > 0 {
-				<br/><strong>{ intToString(skipped) }</strong> entries skipped (SUSPENSE A/C or invalid).
+				<br/>
+				<strong>{ intToString(skipped) }</strong> entries skipped (SUSPENSE A/C or invalid).
 			}
 		</p>
 		<p><a href="/">Go to Search</a> | <a href="/parties">View Parties</a></p>
@@ -123,6 +118,7 @@ type PreviewTransaction struct {
 	Location    string
 	Amount      string
 	PaymentMode string
+	Bank        string
 	Identifiers []PreviewIdentifier
 }
 
