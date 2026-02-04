@@ -77,6 +77,11 @@ var (
 	// Examples: NEFT-UCBAN52025040104667985-SHRI SHYAM AGENCY-/FAST///
 	//           NEFT-BARBN52025040226217799-VAIBHAV LAXMI MEDICALSTORE--37100200000337
 	neftNamePattern = regexp.MustCompile(`NEFT-[A-Z]{4,5}[A-Z0-9]*\d+-([^-]+)-`)
+
+	// INFT pattern: INF/INFT/<ref>/<name1> /<name2>
+	// Example: INF/INFT/039939724801/DURGAKNP /S S PHARMA
+	// Extracts name2 (the receiver/party name)
+	inftNamePattern = regexp.MustCompile(`INF/INFT/\d+/[^/]+\s*/([^/]+)`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -231,17 +236,29 @@ func extractIMPSData(narration string) (names []string, bank string) {
 	return nil, ""
 }
 
-// extractNEFTName extracts party name from NEFT narrations
-// Format: NEFT-<IFSC_PREFIX><REF>-<NAME>-<rest>
+// extractNEFTName extracts party name from NEFT/INFT narrations
+// Formats:
+//   - NEFT-<IFSC_PREFIX><REF>-<NAME>-<rest>
+//   - INF/INFT/<ref>/<name1> /<name2>
 func extractNEFTName(narration string) string {
 	upperNarration := strings.ToUpper(narration)
 
+	// Try NEFT pattern first
 	if matches := neftNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
 		name := strings.TrimSpace(matches[1])
 		if isValidExtractedName(name) {
 			return name
 		}
 	}
+
+	// Try INFT pattern
+	if matches := inftNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
+		name := strings.TrimSpace(matches[1])
+		if isValidExtractedName(name) {
+			return name
+		}
+	}
+
 	return ""
 }
 

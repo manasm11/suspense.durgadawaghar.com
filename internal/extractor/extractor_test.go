@@ -356,6 +356,11 @@ func TestExtractNEFTName(t *testing.T) {
 			want:      []string{"AMAR MEDICINE AND COSMETICS"},
 		},
 		{
+			name:      "INFT format",
+			narration: "INF/INFT/039939724801/DURGAKNP /S S PHARMA",
+			want:      []string{"S S PHARMA"},
+		},
+		{
 			name:      "Non-NEFT narration (UPI)",
 			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
 			want:      nil,
