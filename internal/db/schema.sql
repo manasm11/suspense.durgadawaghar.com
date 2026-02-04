@@ -32,3 +32,7 @@ CREATE INDEX idx_identifiers_value ON identifiers(value);
 CREATE INDEX idx_identifiers_type_value ON identifiers(type, value);
 CREATE INDEX idx_transactions_party_id ON transactions(party_id);
 CREATE INDEX idx_transactions_bank ON transactions(bank);
+
+-- Unique constraint to prevent duplicate transactions
+CREATE UNIQUE INDEX idx_transactions_unique
+ON transactions(party_id, amount, transaction_date, payment_mode, narration, bank);

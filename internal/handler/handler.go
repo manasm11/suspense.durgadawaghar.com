@@ -3,9 +3,11 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"suspense.durgadawaghar.com/internal/db/sqlc"
 	"suspense.durgadawaghar.com/internal/extractor"
@@ -13,6 +15,9 @@ import (
 	"suspense.durgadawaghar.com/internal/parser"
 	"suspense.durgadawaghar.com/internal/views/pages"
 )
+
+// errDuplicate is returned when a transaction already exists
+var errDuplicate = errors.New("duplicate transaction")
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
@@ -137,20 +142,23 @@ func (h *Handler) ImportConfirm(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	imported := 0
-	skipped := 0
-	var errors []string
+	duplicates := 0
+	var importErrors []string
 
 	for _, tx := range transactions {
 		err := h.importTransaction(ctx, tx)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %s", tx.PartyName, err.Error()))
-			skipped++
+			if errors.Is(err, errDuplicate) {
+				duplicates++
+			} else {
+				importErrors = append(importErrors, fmt.Sprintf("%s: %s", tx.PartyName, err.Error()))
+			}
 		} else {
 			imported++
 		}
 	}
 
-	pages.ImportResult(imported, skipped, errors).Render(r.Context(), w)
+	pages.ImportResult(imported, duplicates, importErrors).Render(r.Context(), w)
 }
 
 func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) error {
@@ -205,6 +213,10 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 		Bank:            tx.Bank,
 	})
 	if err != nil {
+		// Check for UNIQUE constraint violation (SQLite error)
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return errDuplicate
+		}
 		return fmt.Errorf("creating transaction: %w", err)
 	}
 

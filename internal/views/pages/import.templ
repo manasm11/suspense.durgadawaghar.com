@@ -88,7 +88,7 @@ templ ImportPreview(transactions []PreviewTransaction, rawData string, year int)
 	}
 }
 
-templ ImportResult(imported int, skipped int, errors []string) {
+templ ImportResult(imported int, duplicates int, errors []string) {
 	if len(errors) > 0 {
 		<div class="error">
 			<h4>Import completed with errors</h4>
@@ -103,9 +103,9 @@ templ ImportResult(imported int, skipped int, errors []string) {
 		<h4>Import Complete</h4>
 		<p>
 			<strong>{ intToString(imported) }</strong> transactions imported successfully.
-			if skipped > 0 {
+			if duplicates > 0 {
 				<br/>
-				<strong>{ intToString(skipped) }</strong> entries skipped (SUSPENSE A/C or invalid).
+				<strong>{ intToString(duplicates) }</strong> duplicates skipped.
 			}
 		</p>
 		<p><a href="/">Go to Search</a> | <a href="/parties">View Parties</a></p>
