@@ -72,6 +72,8 @@ var (
 	impsP2APattern = regexp.MustCompile(`MMT/IMPS/\d{12}/IMPS P2A\s+([^/]+?)\s*/([^/]+)/(.+)`)
 	// MMT/IMPS/<ref>/REQPAY/<name> /<bank> - REQPAY format (request payment)
 	impsREQPAYPattern = regexp.MustCompile(`MMT/IMPS/\d{12}/REQPAY/([^/]+?)\s*/(.+)`)
+	// MMT/IMPS/<ref>/<name>/<bank> - simple name/bank format (fallback for formats without OK/REQPAY/etc)
+	impsSimplePattern = regexp.MustCompile(`MMT/IMPS/\d{12}/([A-Z][A-Z\s]*)/([A-Z][A-Z\s]+)$`)
 
 	// NEFT pattern: NEFT-<IFSC_PREFIX><REF>-<NAME>-<rest>
 	// Examples: NEFT-UCBAN52025040104667985-SHRI SHYAM AGENCY-/FAST///
@@ -134,6 +136,8 @@ var bankNormalization = map[string]string{
 	"AIRTEL PAYME":   "AIRTEL PAYMENTS BANK",
 	"FINO PAYMENT":   "FINO PAYMENTS BANK",
 	"JIOPAYMENTSB":   "JIO PAYMENTS BANK",
+	"PUNJAB AND SIND": "PUNJAB AND SIND BANK",
+	"PUNJAB AND S":    "PUNJAB AND SIND BANK",
 }
 
 // normalizeBank normalizes truncated bank names to full names
@@ -235,6 +239,16 @@ func extractIMPSData(narration string) (names []string, bank string) {
 
 	// Try MMT/IMPS/ref/REQPAY/<name> /<bank> pattern (REQPAY format)
 	if matches := impsREQPAYPattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
+		name := strings.TrimSpace(matches[1])
+		if isValidExtractedName(name) {
+			names = append(names, name)
+		}
+		bank = normalizeBank(matches[2])
+		return
+	}
+
+	// Try MMT/IMPS/ref/<name>/<bank> pattern (simple name/bank format - fallback)
+	if matches := impsSimplePattern.FindStringSubmatch(upperNarration); len(matches) > 2 {
 		name := strings.TrimSpace(matches[1])
 		if isValidExtractedName(name) {
 			names = append(names, name)

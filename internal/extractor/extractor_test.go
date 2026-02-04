@@ -227,6 +227,11 @@ func TestExtractIMPSName(t *testing.T) {
 			narration: "MMT/IMPS/510615959587/REQPAY/NEWVI9936 /STATE BANK OF I",
 			want:      []string{"NEWVI9936"},
 		},
+		{
+			name:      "IMPS simple name/bank format",
+			narration: "MMT/IMPS/534315268553/AMAR AGENC/PUNJAB AND SIND",
+			want:      []string{"AMAR AGENC"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -290,6 +295,11 @@ func TestExtractBankName(t *testing.T) {
 			name:      "IMPS REQPAY format - State Bank normalized",
 			narration: "MMT/IMPS/510615959587/REQPAY/NEWVI9936 /STATE BANK OF I",
 			want:      []string{"STATE BANK OF INDIA"},
+		},
+		{
+			name:      "IMPS simple format - Punjab And Sind Bank normalized",
+			narration: "MMT/IMPS/534315268553/AMAR AGENC/PUNJAB AND SIND",
+			want:      []string{"PUNJAB AND SIND BANK"},
 		},
 	}
 
