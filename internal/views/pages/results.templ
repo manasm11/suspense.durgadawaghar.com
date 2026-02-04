@@ -18,7 +18,7 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 		for _, result := range results {
 			<div class="result-card">
 				<h3>
-					{ result.Party.Name }
+					<span class="copyable" data-copy={ result.Party.Name }>{ result.Party.Name }</span>
 					if result.Party.Location.Valid && result.Party.Location.String != "" {
 						<span class="location">({ result.Party.Location.String })</span>
 					}

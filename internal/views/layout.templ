@@ -9,6 +9,24 @@ templ Layout(title string) {
 			<title>{ title } - Durga Dawa Ghar</title>
 			<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"/>
 			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+			<script>
+				document.addEventListener('click', function(e) {
+					const el = e.target.closest('[data-copy]');
+					if (!el) return;
+					const text = el.dataset.copy;
+					navigator.clipboard.writeText(text).then(function() {
+						el.classList.add('copied');
+						const feedback = document.createElement('span');
+						feedback.className = 'copy-feedback';
+						feedback.textContent = 'Copied!';
+						el.after(feedback);
+						setTimeout(function() {
+							el.classList.remove('copied');
+							feedback.remove();
+						}, 1000);
+					});
+				});
+			</script>
 			<style>
 				table { width: 100%; }
 				.confidence-high { color: #2e7d32; font-weight: bold; }
@@ -45,6 +63,33 @@ templ Layout(title string) {
 				.error { color: #c62828; padding: 1em; background: #ffebee; border-radius: 4px; }
 				.success { color: #2e7d32; padding: 1em; background: #e8f5e9; border-radius: 4px; }
 				.location { color: #666; font-size: 0.9em; }
+				.copyable {
+					cursor: pointer;
+					padding: 2px 6px;
+					border-radius: 4px;
+					transition: background-color 0.2s;
+				}
+				.copyable:hover {
+					background-color: #e3f2fd;
+				}
+				.copyable.copied {
+					background-color: #c8e6c9;
+				}
+				.copy-feedback {
+					display: inline-block;
+					margin-left: 8px;
+					background: #2e7d32;
+					color: white;
+					padding: 2px 8px;
+					border-radius: 4px;
+					font-size: 0.7em;
+					animation: fadeOut 1s forwards;
+				}
+				@keyframes fadeOut {
+					0% { opacity: 1; }
+					70% { opacity: 1; }
+					100% { opacity: 0; }
+				}
 				#narration {
 					width: 100%;
 					max-width: 800px;
