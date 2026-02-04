@@ -83,6 +83,11 @@ var (
 	// Extracts name2 (the receiver/party name)
 	inftNamePattern = regexp.MustCompile(`INF/INFT/\d+/[^/]+\s*/([^/]+)`)
 
+	// INFT single name pattern: INF/INFT/<ref>/<name>
+	// Example: INF/INFT/041141036691/GAYATRI PHARMA
+	// Extracts the single name at the end
+	inftSingleNamePattern = regexp.MustCompile(`INF/INFT/\d+/([A-Z][A-Z\s]+)$`)
+
 	// BIL/INFT pattern: BIL/INFT/<ref>/ <name>
 	// Example: BIL/INFT/EDC0857581/ SANJIT KUMAR
 	// Extracts the name after the reference
@@ -257,8 +262,16 @@ func extractNEFTName(narration string) string {
 		}
 	}
 
-	// Try INFT pattern
+	// Try INFT two-name pattern
 	if matches := inftNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
+		name := strings.TrimSpace(matches[1])
+		if isValidExtractedName(name) {
+			return name
+		}
+	}
+
+	// Try INFT single name pattern
+	if matches := inftSingleNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
 		name := strings.TrimSpace(matches[1])
 		if isValidExtractedName(name) {
 			return name
