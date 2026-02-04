@@ -36,3 +36,19 @@ CREATE INDEX idx_transactions_bank ON transactions(bank);
 -- Unique constraint to prevent duplicate transactions
 CREATE UNIQUE INDEX idx_transactions_unique
 ON transactions(party_id, amount, transaction_date, payment_mode, narration, bank);
+
+-- sale_bills: imported sale bill entries
+CREATE TABLE sale_bills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_number TEXT NOT NULL,
+    bill_date DATE NOT NULL,
+    party_name TEXT NOT NULL,
+    amount REAL NOT NULL,
+    is_cash_sale BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_sale_bills_amount ON sale_bills(amount);
+CREATE INDEX idx_sale_bills_date ON sale_bills(bill_date);
+CREATE INDEX idx_sale_bills_amount_date ON sale_bills(amount, bill_date);
+CREATE UNIQUE INDEX idx_sale_bills_unique ON sale_bills(bill_number, bill_date, party_name, amount);

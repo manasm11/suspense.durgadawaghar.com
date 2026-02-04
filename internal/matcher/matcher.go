@@ -13,8 +13,8 @@ import (
 
 // MatchResult represents a party match with confidence score
 type MatchResult struct {
-	Party            sqlc.Party          // Primary party (first found)
-	PartyIDs         []int64             // All party IDs with this name
+	Party            sqlc.Party // Primary party (first found)
+	PartyIDs         []int64    // All party IDs with this name
 	Confidence       float64
 	MatchedOn        []MatchedIdentifier
 	TransactionCount int64

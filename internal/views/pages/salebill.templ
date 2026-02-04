@@ -1,0 +1,194 @@
+package pages
+
+import "suspense.durgadawaghar.com/internal/views"
+
+// PreviewSaleBill represents a sale bill for preview display
+type PreviewSaleBill struct {
+	BillNumber string
+	Date       string
+	PartyName  string
+	Amount     string
+	IsCashSale bool
+}
+
+// SaleBillSearchResult represents a sale bill search result
+type SaleBillSearchResult struct {
+	ID         int64
+	BillNumber string
+	Date       string
+	PartyName  string
+	Amount     string
+	IsCashSale bool
+}
+
+templ ImportSaleBills() {
+	@views.Layout("Import Sale Bills") {
+		<h2>Import Sale Bills</h2>
+		<p>Paste your sale bill data below. The parser expects the following format:</p>
+		<pre>
+			SALE FROM 01-04-2024 TO 31-03-2025
+			Bill No.  Date   Party Name              Amount
+			A240100001 01-04 PARTY NAME HERE         1,234.56
+			A240100002 01-04 CASH (STORE NAME)       500.00
+		</pre>
+		<form hx-post="/sale-bills/import/preview" hx-target="#preview" hx-indicator="#loading">
+			<label for="data">Sale Bill Data</label>
+			<textarea
+				id="data"
+				name="data"
+				placeholder="Paste sale bill data here..."
+				rows="15"
+			></textarea>
+			<label for="year">Year (used if not found in header)</label>
+			<input type="number" id="year" name="year" value="2025" min="2000" max="2100"/>
+			<button type="submit">
+				Preview Import
+				<span id="loading" class="htmx-indicator">Processing...</span>
+			</button>
+		</form>
+		<div id="preview"></div>
+	}
+}
+
+templ ImportSaleBillsPreview(bills []PreviewSaleBill, rawData string, year int) {
+	<h3>Preview: { intToString(len(bills)) } Sale Bills Found</h3>
+	if len(bills) == 0 {
+		<div class="error">
+			No valid sale bills found. Please check your data format.
+		</div>
+	} else {
+		<div class="preview-table">
+			<table>
+				<thead>
+					<tr>
+						<th>Bill Number</th>
+						<th>Date</th>
+						<th>Party Name</th>
+						<th>Amount</th>
+						<th>Type</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, bill := range bills {
+						<tr>
+							<td>{ bill.BillNumber }</td>
+							<td>{ bill.Date }</td>
+							<td>{ bill.PartyName }</td>
+							<td>{ bill.Amount }</td>
+							<td>
+								if bill.IsCashSale {
+									<span class="match-badge">CASH</span>
+								} else {
+									Credit
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<form hx-post="/sale-bills/import/confirm" hx-target="#preview" hx-indicator="#confirming">
+			<input type="hidden" name="data" value={ rawData }/>
+			<input type="hidden" name="year" value={ intToString(year) }/>
+			<button type="submit">
+				Confirm Import
+				<span id="confirming" class="htmx-indicator">Importing...</span>
+			</button>
+		</form>
+	}
+}
+
+templ ImportSaleBillsResult(imported int, duplicates int, errors []string) {
+	if len(errors) > 0 {
+		<div class="error">
+			<h4>Import completed with errors</h4>
+			<ul>
+				for _, err := range errors {
+					<li>{ err }</li>
+				}
+			</ul>
+		</div>
+	}
+	<div class="success">
+		<h4>Import Complete</h4>
+		<p>
+			<strong>{ intToString(imported) }</strong> sale bills imported successfully.
+			if duplicates > 0 {
+				<br/>
+				<strong>{ intToString(duplicates) }</strong> duplicates skipped.
+			}
+		</p>
+		<p><a href="/sale-bills/search">Search Sale Bills</a> | <a href="/sale-bills/import">Import More</a></p>
+	</div>
+}
+
+templ SearchSaleBills(defaultFromDate string, defaultTillDate string) {
+	@views.Layout("Search Sale Bills") {
+		<h2>Search Sale Bills by Amount</h2>
+		<p>Search for sale bills by amount with optional variation.</p>
+		<form hx-post="/sale-bills/search/results" hx-target="#results" hx-indicator="#searching">
+			<div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1em;">
+				<div>
+					<label for="amount">Amount</label>
+					<input type="number" id="amount" name="amount" step="0.01" placeholder="e.g., 6870.00" required/>
+				</div>
+				<div>
+					<label for="variation">Variation (+/-)</label>
+					<input type="number" id="variation" name="variation" step="0.01" value="0" min="0"/>
+				</div>
+				<div>
+					<label for="from_date">From Date</label>
+					<input type="date" id="from_date" name="from_date" value={ defaultFromDate }/>
+				</div>
+				<div>
+					<label for="till_date">Till Date</label>
+					<input type="date" id="till_date" name="till_date" value={ defaultTillDate }/>
+				</div>
+			</div>
+			<button type="submit" style="margin-top: 1em;">
+				Search
+				<span id="searching" class="htmx-indicator">Searching...</span>
+			</button>
+		</form>
+		<div id="results"></div>
+	}
+}
+
+templ SaleBillSearchResults(results []SaleBillSearchResult, amount string, variation string) {
+	<h3>Search Results: { intToString(len(results)) } bills found</h3>
+	<p class="stats">Searching for amount { amount } +/- { variation }</p>
+	if len(results) == 0 {
+		<div class="error">
+			No sale bills found matching your criteria.
+		</div>
+	} else {
+		<table>
+			<thead>
+				<tr>
+					<th>Bill Number</th>
+					<th>Date</th>
+					<th>Party Name</th>
+					<th>Amount</th>
+					<th>Type</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, bill := range results {
+					<tr>
+						<td>{ bill.BillNumber }</td>
+						<td>{ bill.Date }</td>
+						<td>{ bill.PartyName }</td>
+						<td>{ bill.Amount }</td>
+						<td>
+							if bill.IsCashSale {
+								<span class="match-badge">CASH</span>
+							} else {
+								Credit
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
+}

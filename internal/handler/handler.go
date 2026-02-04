@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"suspense.durgadawaghar.com/internal/db/sqlc"
 	"suspense.durgadawaghar.com/internal/extractor"
@@ -247,3 +248,158 @@ func (h *Handler) PartyDetail(w http.ResponseWriter, r *http.Request) {
 	pages.PartyDetail(party, identifiers, transactions).Render(ctx, w)
 }
 
+// ImportSaleBills renders the sale bill import form
+func (h *Handler) ImportSaleBills(w http.ResponseWriter, r *http.Request) {
+	pages.ImportSaleBills().Render(r.Context(), w)
+}
+
+// ImportSaleBillsPreview parses and previews sale bill import data
+func (h *Handler) ImportSaleBillsPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data := r.FormValue("data")
+	yearStr := r.FormValue("year")
+	year := 2025
+	if y, err := strconv.Atoi(yearStr); err == nil {
+		year = y
+	}
+
+	bills := parser.ParseSaleBills(data, year)
+
+	previewBills := make([]pages.PreviewSaleBill, len(bills))
+	for i, bill := range bills {
+		previewBills[i] = pages.PreviewSaleBill{
+			BillNumber: bill.BillNumber,
+			Date:       bill.Date.Format("02 Jan 2006"),
+			PartyName:  bill.PartyName,
+			Amount:     fmt.Sprintf("%.2f", bill.Amount),
+			IsCashSale: bill.IsCashSale,
+		}
+	}
+
+	pages.ImportSaleBillsPreview(previewBills, data, year).Render(r.Context(), w)
+}
+
+// ImportSaleBillsConfirm executes the sale bill import
+func (h *Handler) ImportSaleBillsConfirm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	data := r.FormValue("data")
+	yearStr := r.FormValue("year")
+	year := 2025
+	if y, err := strconv.Atoi(yearStr); err == nil {
+		year = y
+	}
+
+	bills := parser.ParseSaleBills(data, year)
+
+	ctx := r.Context()
+	imported := 0
+	duplicates := 0
+	var importErrors []string
+
+	for _, bill := range bills {
+		_, err := h.queries.CreateSaleBill(ctx, sqlc.CreateSaleBillParams{
+			BillNumber: bill.BillNumber,
+			BillDate:   bill.Date,
+			PartyName:  bill.PartyName,
+			Amount:     bill.Amount,
+			IsCashSale: sql.NullBool{Bool: bill.IsCashSale, Valid: true},
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				duplicates++
+			} else {
+				importErrors = append(importErrors, fmt.Sprintf("%s: %s", bill.BillNumber, err.Error()))
+			}
+		} else {
+			imported++
+		}
+	}
+
+	pages.ImportSaleBillsResult(imported, duplicates, importErrors).Render(r.Context(), w)
+}
+
+// SearchSaleBills renders the sale bill search form
+func (h *Handler) SearchSaleBills(w http.ResponseWriter, r *http.Request) {
+	// Default from date is 1 year ago, till date is today
+	defaultFromDate := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
+	defaultTillDate := time.Now().Format("2006-01-02")
+	pages.SearchSaleBills(defaultFromDate, defaultTillDate).Render(r.Context(), w)
+}
+
+// SearchSaleBillsResults executes the sale bill search
+func (h *Handler) SearchSaleBillsResults(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	amountStr := r.FormValue("amount")
+	variationStr := r.FormValue("variation")
+	fromDateStr := r.FormValue("from_date")
+	tillDateStr := r.FormValue("till_date")
+
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil {
+		w.Write([]byte(`<div class="error">Invalid amount.</div>`))
+		return
+	}
+
+	variation := 0.0
+	if v, err := strconv.ParseFloat(variationStr, 64); err == nil {
+		variation = v
+	}
+
+	fromDate := time.Now().AddDate(-1, 0, 0)
+	if fromDateStr != "" {
+		if parsed, err := time.Parse("2006-01-02", fromDateStr); err == nil {
+			fromDate = parsed
+		}
+	}
+
+	tillDate := time.Now()
+	if tillDateStr != "" {
+		if parsed, err := time.Parse("2006-01-02", tillDateStr); err == nil {
+			tillDate = parsed
+		}
+	}
+
+	minAmount := amount - variation
+	maxAmount := amount + variation
+
+	bills, err := h.queries.SearchSaleBillsByAmountRange(r.Context(), sqlc.SearchSaleBillsByAmountRangeParams{
+		Amount:     minAmount,
+		Amount_2:   maxAmount,
+		BillDate:   fromDate,
+		BillDate_2: tillDate,
+	})
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf(`<div class="error">Search error: %s</div>`, err.Error())))
+		return
+	}
+
+	results := make([]pages.SaleBillSearchResult, len(bills))
+	for i, bill := range bills {
+		isCash := false
+		if bill.IsCashSale.Valid {
+			isCash = bill.IsCashSale.Bool
+		}
+		results[i] = pages.SaleBillSearchResult{
+			ID:         bill.ID,
+			BillNumber: bill.BillNumber,
+			Date:       bill.BillDate.Format("02 Jan 2006"),
+			PartyName:  bill.PartyName,
+			Amount:     fmt.Sprintf("%.2f", bill.Amount),
+			IsCashSale: isCash,
+		}
+	}
+
+	pages.SaleBillSearchResults(results, amountStr, variationStr).Render(r.Context(), w)
+}

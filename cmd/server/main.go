@@ -41,6 +41,13 @@ func main() {
 	mux.HandleFunc("/import/confirm", h.ImportConfirm)
 	mux.HandleFunc("/party/", h.PartyDetail)
 
+	// Sale Bills
+	mux.HandleFunc("/sale-bills/import", h.ImportSaleBills)
+	mux.HandleFunc("/sale-bills/import/preview", h.ImportSaleBillsPreview)
+	mux.HandleFunc("/sale-bills/import/confirm", h.ImportSaleBillsConfirm)
+	mux.HandleFunc("/sale-bills/search", h.SearchSaleBills)
+	mux.HandleFunc("/sale-bills/search/results", h.SearchSaleBillsResults)
+
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("Starting server on http://localhost%s", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
@@ -86,6 +93,54 @@ func migrateDB(db *sql.DB) error {
 			log.Printf("Migration: Warning - could not create bank index: %v", err)
 		}
 	}
+
+	// Migrate sale_bills table
+	if err := migrateSaleBillsTable(db); err != nil {
+		return fmt.Errorf("migrating sale_bills table: %w", err)
+	}
+
+	return nil
+}
+
+func migrateSaleBillsTable(db *sql.DB) error {
+	// Check if sale_bills table exists by trying to query it
+	_, err := db.Exec("SELECT id FROM sale_bills LIMIT 1")
+	if err != nil {
+		// Table doesn't exist, create it
+		_, err = db.Exec(`
+			CREATE TABLE sale_bills (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				bill_number TEXT NOT NULL,
+				bill_date DATE NOT NULL,
+				party_name TEXT NOT NULL,
+				amount REAL NOT NULL,
+				is_cash_sale BOOLEAN DEFAULT FALSE,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
+		if err != nil {
+			return fmt.Errorf("creating sale_bills table: %w", err)
+		}
+		log.Printf("Migration: Created sale_bills table")
+
+		// Create indexes
+		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_sale_bills_amount ON sale_bills(amount)")
+		if err != nil {
+			log.Printf("Migration: Warning - could not create amount index: %v", err)
+		}
+		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_sale_bills_date ON sale_bills(bill_date)")
+		if err != nil {
+			log.Printf("Migration: Warning - could not create date index: %v", err)
+		}
+		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_sale_bills_amount_date ON sale_bills(amount, bill_date)")
+		if err != nil {
+			log.Printf("Migration: Warning - could not create amount_date index: %v", err)
+		}
+		_, err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sale_bills_unique ON sale_bills(bill_number, bill_date, party_name, amount)")
+		if err != nil {
+			log.Printf("Migration: Warning - could not create unique index: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -124,4 +179,20 @@ CREATE INDEX IF NOT EXISTS idx_identifiers_value ON identifiers(value);
 CREATE INDEX IF NOT EXISTS idx_identifiers_type_value ON identifiers(type, value);
 CREATE INDEX IF NOT EXISTS idx_transactions_party_id ON transactions(party_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_bank ON transactions(bank);
+
+-- sale_bills: imported sale bill entries
+CREATE TABLE IF NOT EXISTS sale_bills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bill_number TEXT NOT NULL,
+    bill_date DATE NOT NULL,
+    party_name TEXT NOT NULL,
+    amount REAL NOT NULL,
+    is_cash_sale BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sale_bills_amount ON sale_bills(amount);
+CREATE INDEX IF NOT EXISTS idx_sale_bills_date ON sale_bills(bill_date);
+CREATE INDEX IF NOT EXISTS idx_sale_bills_amount_date ON sale_bills(amount, bill_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sale_bills_unique ON sale_bills(bill_number, bill_date, party_name, amount);
 `

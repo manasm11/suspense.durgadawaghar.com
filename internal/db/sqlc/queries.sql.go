@@ -72,6 +72,41 @@ func (q *Queries) CreateParty(ctx context.Context, arg CreatePartyParams) (Party
 	return i, err
 }
 
+const createSaleBill = `-- name: CreateSaleBill :one
+INSERT INTO sale_bills (bill_number, bill_date, party_name, amount, is_cash_sale)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, bill_number, bill_date, party_name, amount, is_cash_sale, created_at
+`
+
+type CreateSaleBillParams struct {
+	BillNumber string
+	BillDate   time.Time
+	PartyName  string
+	Amount     float64
+	IsCashSale sql.NullBool
+}
+
+func (q *Queries) CreateSaleBill(ctx context.Context, arg CreateSaleBillParams) (SaleBill, error) {
+	row := q.db.QueryRowContext(ctx, createSaleBill,
+		arg.BillNumber,
+		arg.BillDate,
+		arg.PartyName,
+		arg.Amount,
+		arg.IsCashSale,
+	)
+	var i SaleBill
+	err := row.Scan(
+		&i.ID,
+		&i.BillNumber,
+		&i.BillDate,
+		&i.PartyName,
+		&i.Amount,
+		&i.IsCashSale,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO transactions (party_id, amount, transaction_date, payment_mode, narration, bank)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -715,6 +750,57 @@ func (q *Queries) ListParties(ctx context.Context) ([]Party, error) {
 			&i.ID,
 			&i.Name,
 			&i.Location,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSaleBillsByAmountRange = `-- name: SearchSaleBillsByAmountRange :many
+SELECT id, bill_number, bill_date, party_name, amount, is_cash_sale, created_at FROM sale_bills
+WHERE amount >= ? AND amount <= ?
+  AND bill_date >= ? AND bill_date <= ?
+ORDER BY bill_date DESC, amount DESC
+LIMIT 100
+`
+
+type SearchSaleBillsByAmountRangeParams struct {
+	Amount     float64
+	Amount_2   float64
+	BillDate   time.Time
+	BillDate_2 time.Time
+}
+
+func (q *Queries) SearchSaleBillsByAmountRange(ctx context.Context, arg SearchSaleBillsByAmountRangeParams) ([]SaleBill, error) {
+	rows, err := q.db.QueryContext(ctx, searchSaleBillsByAmountRange,
+		arg.Amount,
+		arg.Amount_2,
+		arg.BillDate,
+		arg.BillDate_2,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SaleBill
+	for rows.Next() {
+		var i SaleBill
+		if err := rows.Scan(
+			&i.ID,
+			&i.BillNumber,
+			&i.BillDate,
+			&i.PartyName,
+			&i.Amount,
+			&i.IsCashSale,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

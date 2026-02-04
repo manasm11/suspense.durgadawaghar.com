@@ -24,6 +24,16 @@ type Party struct {
 	CreatedAt sql.NullTime
 }
 
+type SaleBill struct {
+	ID         int64
+	BillNumber string
+	BillDate   time.Time
+	PartyName  string
+	Amount     float64
+	IsCashSale sql.NullBool
+	CreatedAt  sql.NullTime
+}
+
 type Transaction struct {
 	ID              int64
 	PartyID         int64

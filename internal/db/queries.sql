@@ -102,3 +102,15 @@ SELECT * FROM transactions
 WHERE party_id = ? AND bank = ?
 ORDER BY transaction_date DESC
 LIMIT ?;
+
+-- name: CreateSaleBill :one
+INSERT INTO sale_bills (bill_number, bill_date, party_name, amount, is_cash_sale)
+VALUES (?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: SearchSaleBillsByAmountRange :many
+SELECT * FROM sale_bills
+WHERE amount >= ? AND amount <= ?
+  AND bill_date >= ? AND bill_date <= ?
+ORDER BY bill_date DESC, amount DESC
+LIMIT 100;
