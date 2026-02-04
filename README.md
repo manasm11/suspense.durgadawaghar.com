@@ -10,10 +10,14 @@ A web application for managing suspense account transactions from receipt books.
   - Phone numbers (Indian 10-digit mobile numbers)
   - Bank account numbers (9-18 digit account numbers)
   - IFSC codes (bank branch identifiers)
+  - IMPS names (sender/receiver names from IMPS transactions)
+  - Bank names (normalized from IMPS narrations)
 - **Payment Mode Detection**: Identifies transaction types:
   - UPI, IMPS, NEFT, RTGS, CLG (clearing/cheque), INF (internal fund transfer), TRF (transfer), CHEQUE, POS, CASH
-- **Party Matching**: Automatically links transactions to parties based on extracted identifiers
-- **Search**: Search parties by name, location, or any identifier
+- **IMPS Format Support**: Parses multiple IMPS narration formats including P2A (Person to Account) transfers
+- **Party Matching**: Automatically links transactions to parties based on extracted identifiers with confidence scoring
+- **Multi-Bank Support**: Transactions are associated with their source bank (ICICI, HDFC) for bank-filtered matching
+- **Search**: Search parties by narration within a selected bank context
 
 ## Prerequisites
 
@@ -91,7 +95,7 @@ make sqlc
 | Endpoint | Description |
 |----------|-------------|
 | `GET /` | Home page with search |
-| `POST /search` | Search parties by narration |
+| `POST /search` | Search parties by narration (requires bank param) |
 | `GET /parties` | List all parties |
 | `GET /party/{id}` | Party details and transactions |
 | `GET /import` | Import form |

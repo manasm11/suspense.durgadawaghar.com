@@ -43,21 +43,27 @@ This is a Go web application for managing suspense account transactions from rec
    - Phone numbers (Indian 10-digit)
    - Bank account numbers (9-18 digits)
    - IFSC codes
+   - IMPS names (sender/receiver names from IMPS transactions)
+   - Bank names (extracted and normalized from IMPS narrations)
 
 3. **Matcher** (`internal/matcher/`) - Matches transactions to parties using extracted identifiers
-   - Confidence scoring based on identifier type (UPI > Phone > Account)
+   - Bank-filtered matching (transactions matched within same bank)
+   - Confidence scoring based on identifier type:
+     - UPI VPA: 95%, Phone: 85%, Account: 80%, IMPS Name: 50%, Bank Name: 20%
    - History boost for parties with more transactions
+   - Fallback narration search using IMPS names and reference numbers
 
 4. **Handler** (`internal/handler/`) - HTTP handlers using templ templates
    - Import flow: paste text -> preview parsed data -> confirm import
-   - Search by narration text to find matching parties
+   - Search by narration text to find matching parties (requires bank selection)
+   - Bank-filtered queries for all party lookups
 
 ### Database
 
 SQLite with sqlc-generated Go code. Schema in `internal/db/schema.sql`:
 - `parties` - unique business entities
-- `identifiers` - links parties to their UPI/phone/account identifiers
-- `transactions` - imported receipt book entries
+- `identifiers` - links parties to their UPI/phone/account/imps_name/bank_name identifiers
+- `transactions` - imported receipt book entries (includes `bank` column for multi-bank support)
 
 ### Templating
 
@@ -84,3 +90,17 @@ The parser maintains a list of known location indicators in `internal/parser/par
 ### Adding New Payment Modes
 
 Payment mode detection uses regex patterns in `internal/parser/parser.go` (e.g., `upiModePattern`, `neftModePattern`). Add new patterns following the existing format.
+
+### IMPS Format Patterns
+
+The extractor (`internal/extractor/extractor.go`) handles multiple IMPS narration formats:
+- Standard OK format: `MMT/IMPS/<ref>/OK/<name>/<bank>`
+- Two names format: `MMT/IMPS/<ref>/<name1>/<name2>/<bank>`
+- Secondary reference format: `MMT/IMPS/<ref>/<secondary_ref> /<name>/<bank>`
+- P2A (Person to Account) format: `MMT/IMPS/<ref>/IMPS P2A <sender>/<receiver>/<bank>`
+
+Bank names are normalized from truncated forms (e.g., "HDFC BAN" → "HDFC BANK"). See `bankNameMap` in extractor.go.
+
+### Multi-Bank Support
+
+Transactions are associated with a bank (extracted from the bank account line in receipt book). Currently, the UI limits bank selection to ICICI and HDFC. The `bank` field is used to filter searches and match parties within the same bank context.
