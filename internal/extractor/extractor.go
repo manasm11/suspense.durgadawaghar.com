@@ -82,6 +82,11 @@ var (
 	// Example: INF/INFT/039939724801/DURGAKNP /S S PHARMA
 	// Extracts name2 (the receiver/party name)
 	inftNamePattern = regexp.MustCompile(`INF/INFT/\d+/[^/]+\s*/([^/]+)`)
+
+	// BIL/INFT pattern: BIL/INFT/<ref>/ <name>
+	// Example: BIL/INFT/EDC0857581/ SANJIT KUMAR
+	// Extracts the name after the reference
+	bilInftNamePattern = regexp.MustCompile(`BIL/INFT/[A-Z0-9]+/\s*([A-Z][A-Z\s]+)`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -240,6 +245,7 @@ func extractIMPSData(narration string) (names []string, bank string) {
 // Formats:
 //   - NEFT-<IFSC_PREFIX><REF>-<NAME>-<rest>
 //   - INF/INFT/<ref>/<name1> /<name2>
+//   - BIL/INFT/<ref>/ <name>
 func extractNEFTName(narration string) string {
 	upperNarration := strings.ToUpper(narration)
 
@@ -253,6 +259,14 @@ func extractNEFTName(narration string) string {
 
 	// Try INFT pattern
 	if matches := inftNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
+		name := strings.TrimSpace(matches[1])
+		if isValidExtractedName(name) {
+			return name
+		}
+	}
+
+	// Try BIL/INFT pattern
+	if matches := bilInftNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
 		name := strings.TrimSpace(matches[1])
 		if isValidExtractedName(name) {
 			return name
