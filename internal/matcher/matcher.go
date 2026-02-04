@@ -13,7 +13,8 @@ import (
 
 // MatchResult represents a party match with confidence score
 type MatchResult struct {
-	Party            sqlc.Party
+	Party            sqlc.Party          // Primary party (first found)
+	PartyIDs         []int64             // All party IDs with this name
 	Confidence       float64
 	MatchedOn        []MatchedIdentifier
 	TransactionCount int64
@@ -74,11 +75,11 @@ func (m *Matcher) Match(ctx context.Context, narration string) ([]MatchResult, e
 		return m.matchByNarration(ctx, narration, identifiers)
 	}
 
-	// Group matches by party ID and calculate scores
-	partyMatches := make(map[int64]*MatchResult)
+	// Group matches by party name (not ID) and calculate scores
+	partyMatches := make(map[string]*MatchResult)
 
 	for _, match := range matches {
-		result, exists := partyMatches[match.ID]
+		result, exists := partyMatches[match.Name]
 		if !exists {
 			result = &MatchResult{
 				Party: sqlc.Party{
@@ -87,17 +88,26 @@ func (m *Matcher) Match(ctx context.Context, narration string) ([]MatchResult, e
 					Location:  match.Location,
 					CreatedAt: match.CreatedAt,
 				},
+				PartyIDs:   []int64{match.ID},
 				Confidence: 0,
 				MatchedOn:  []MatchedIdentifier{},
 			}
-			partyMatches[match.ID] = result
+			partyMatches[match.Name] = result
+		} else {
+			// Add party ID if not already present
+			if !containsInt64(result.PartyIDs, match.ID) {
+				result.PartyIDs = append(result.PartyIDs, match.ID)
+			}
 		}
 
-		// Add matched identifier
-		result.MatchedOn = append(result.MatchedOn, MatchedIdentifier{
+		// Add matched identifier (dedupe by type+value)
+		identifier := MatchedIdentifier{
 			Type:  match.MatchType,
 			Value: match.MatchValue,
-		})
+		}
+		if !containsIdentifier(result.MatchedOn, identifier) {
+			result.MatchedOn = append(result.MatchedOn, identifier)
+		}
 	}
 
 	// Calculate confidence scores and fetch transaction stats
@@ -107,28 +117,46 @@ func (m *Matcher) Match(ctx context.Context, narration string) ([]MatchResult, e
 		// Calculate base confidence from identifier matches
 		result.Confidence = calculateConfidence(result.MatchedOn)
 
-		// Get transaction stats
-		stats, err := m.queries.GetPartyWithTransactionCount(ctx, result.Party.ID)
-		if err == nil {
-			result.TransactionCount = stats.TransactionCount
-			if stats.TotalAmount.Valid {
-				result.TotalAmount = stats.TotalAmount.Float64
+		// Aggregate stats from all party IDs
+		var totalTxCount int64
+		var totalAmount float64
+		var allRecentTxns []sqlc.Transaction
+
+		for _, partyID := range result.PartyIDs {
+			stats, err := m.queries.GetPartyWithTransactionCount(ctx, partyID)
+			if err == nil {
+				totalTxCount += stats.TransactionCount
+				if stats.TotalAmount.Valid {
+					totalAmount += stats.TotalAmount.Float64
+				}
 			}
 
-			// Apply history boost: 1.0 + log10(tx_count) * 0.1
-			if stats.TransactionCount > 0 {
-				historyBoost := 1.0 + math.Log10(float64(stats.TransactionCount))*0.1
-				result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			// Get recent transactions for this party ID
+			recentTxns, err := m.queries.GetRecentTransactionsByPartyID(ctx, sqlc.GetRecentTransactionsByPartyIDParams{
+				PartyID: partyID,
+				Limit:   5,
+			})
+			if err == nil {
+				allRecentTxns = append(allRecentTxns, recentTxns...)
 			}
 		}
 
-		// Get recent transactions (limit 5)
-		recentTxns, err := m.queries.GetRecentTransactionsByPartyID(ctx, sqlc.GetRecentTransactionsByPartyIDParams{
-			PartyID: result.Party.ID,
-			Limit:   5,
+		result.TransactionCount = totalTxCount
+		result.TotalAmount = totalAmount
+
+		// Sort all recent transactions by date and limit to 5
+		sort.Slice(allRecentTxns, func(i, j int) bool {
+			return allRecentTxns[i].TransactionDate.After(allRecentTxns[j].TransactionDate)
 		})
-		if err == nil {
-			result.RecentTxns = recentTxns
+		if len(allRecentTxns) > 5 {
+			allRecentTxns = allRecentTxns[:5]
+		}
+		result.RecentTxns = allRecentTxns
+
+		// Apply history boost: 1.0 + log10(tx_count) * 0.1
+		if totalTxCount > 0 {
+			historyBoost := 1.0 + math.Log10(float64(totalTxCount))*0.1
+			result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
 		}
 
 		results = append(results, *result)
@@ -230,11 +258,11 @@ func (m *Matcher) MatchWithBank(ctx context.Context, narration string, bank stri
 		return m.matchByNarrationWithBank(ctx, narration, identifiers, bank)
 	}
 
-	// Group matches by party ID and calculate scores
-	partyMatches := make(map[int64]*MatchResult)
+	// Group matches by party name (not ID) and calculate scores
+	partyMatches := make(map[string]*MatchResult)
 
 	for _, match := range matches {
-		result, exists := partyMatches[match.ID]
+		result, exists := partyMatches[match.Name]
 		if !exists {
 			result = &MatchResult{
 				Party: sqlc.Party{
@@ -243,17 +271,26 @@ func (m *Matcher) MatchWithBank(ctx context.Context, narration string, bank stri
 					Location:  match.Location,
 					CreatedAt: match.CreatedAt,
 				},
+				PartyIDs:   []int64{match.ID},
 				Confidence: 0,
 				MatchedOn:  []MatchedIdentifier{},
 			}
-			partyMatches[match.ID] = result
+			partyMatches[match.Name] = result
+		} else {
+			// Add party ID if not already present
+			if !containsInt64(result.PartyIDs, match.ID) {
+				result.PartyIDs = append(result.PartyIDs, match.ID)
+			}
 		}
 
-		// Add matched identifier
-		result.MatchedOn = append(result.MatchedOn, MatchedIdentifier{
+		// Add matched identifier (dedupe by type+value)
+		identifier := MatchedIdentifier{
 			Type:  match.MatchType,
 			Value: match.MatchValue,
-		})
+		}
+		if !containsIdentifier(result.MatchedOn, identifier) {
+			result.MatchedOn = append(result.MatchedOn, identifier)
+		}
 	}
 
 	// Calculate confidence scores and fetch transaction stats
@@ -263,32 +300,50 @@ func (m *Matcher) MatchWithBank(ctx context.Context, narration string, bank stri
 		// Calculate base confidence from identifier matches
 		result.Confidence = calculateConfidence(result.MatchedOn)
 
-		// Get transaction stats for this bank
-		stats, err := m.queries.GetPartyWithTransactionCountByBank(ctx, sqlc.GetPartyWithTransactionCountByBankParams{
-			Bank: bank,
-			ID:   result.Party.ID,
-		})
-		if err == nil {
-			result.TransactionCount = stats.TransactionCount
-			if amount, ok := stats.TotalAmount.(float64); ok {
-				result.TotalAmount = amount
+		// Aggregate stats from all party IDs
+		var totalTxCount int64
+		var totalAmount float64
+		var allRecentTxns []sqlc.Transaction
+
+		for _, partyID := range result.PartyIDs {
+			stats, err := m.queries.GetPartyWithTransactionCountByBank(ctx, sqlc.GetPartyWithTransactionCountByBankParams{
+				Bank: bank,
+				ID:   partyID,
+			})
+			if err == nil {
+				totalTxCount += stats.TransactionCount
+				if amount, ok := stats.TotalAmount.(float64); ok {
+					totalAmount += amount
+				}
 			}
 
-			// Apply history boost: 1.0 + log10(tx_count) * 0.1
-			if stats.TransactionCount > 0 {
-				historyBoost := 1.0 + math.Log10(float64(stats.TransactionCount))*0.1
-				result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			// Get recent transactions for this party ID and bank
+			recentTxns, err := m.queries.GetRecentTransactionsByPartyIDAndBank(ctx, sqlc.GetRecentTransactionsByPartyIDAndBankParams{
+				PartyID: partyID,
+				Bank:    bank,
+				Limit:   5,
+			})
+			if err == nil {
+				allRecentTxns = append(allRecentTxns, recentTxns...)
 			}
 		}
 
-		// Get recent transactions for this bank (limit 5)
-		recentTxns, err := m.queries.GetRecentTransactionsByPartyIDAndBank(ctx, sqlc.GetRecentTransactionsByPartyIDAndBankParams{
-			PartyID: result.Party.ID,
-			Bank:    bank,
-			Limit:   5,
+		result.TransactionCount = totalTxCount
+		result.TotalAmount = totalAmount
+
+		// Sort all recent transactions by date and limit to 5
+		sort.Slice(allRecentTxns, func(i, j int) bool {
+			return allRecentTxns[i].TransactionDate.After(allRecentTxns[j].TransactionDate)
 		})
-		if err == nil {
-			result.RecentTxns = recentTxns
+		if len(allRecentTxns) > 5 {
+			allRecentTxns = allRecentTxns[:5]
+		}
+		result.RecentTxns = allRecentTxns
+
+		// Apply history boost: 1.0 + log10(tx_count) * 0.1
+		if totalTxCount > 0 {
+			historyBoost := 1.0 + math.Log10(float64(totalTxCount))*0.1
+			result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
 		}
 
 		results = append(results, *result)
@@ -342,7 +397,8 @@ func (m *Matcher) matchByNarrationWithBank(ctx context.Context, narration string
 	}
 
 	// Query for each pattern and collect results
-	partyMatches := make(map[int64]*MatchResult)
+	// Group by party name (not ID)
+	partyMatches := make(map[string]*MatchResult)
 
 	for _, pattern := range patterns {
 		matches, err := m.queries.FindPartiesByNarrationPatternAndBank(ctx, sqlc.FindPartiesByNarrationPatternAndBankParams{
@@ -354,19 +410,26 @@ func (m *Matcher) matchByNarrationWithBank(ctx context.Context, narration string
 		}
 
 		for _, match := range matches {
-			if _, exists := partyMatches[match.ID]; !exists {
-				partyMatches[match.ID] = &MatchResult{
+			result, exists := partyMatches[match.Name]
+			if !exists {
+				partyMatches[match.Name] = &MatchResult{
 					Party: sqlc.Party{
 						ID:        match.ID,
 						Name:      match.Name,
 						Location:  match.Location,
 						CreatedAt: match.CreatedAt,
 					},
+					PartyIDs:   []int64{match.ID},
 					Confidence: 40, // Lower confidence for narration-based matches
 					MatchedOn: []MatchedIdentifier{{
 						Type:  "narration",
 						Value: strings.TrimPrefix(strings.TrimSuffix(pattern, "%"), "%"),
 					}},
+				}
+			} else {
+				// Add party ID if not already present
+				if !containsInt64(result.PartyIDs, match.ID) {
+					result.PartyIDs = append(result.PartyIDs, match.ID)
 				}
 			}
 		}
@@ -376,32 +439,50 @@ func (m *Matcher) matchByNarrationWithBank(ctx context.Context, narration string
 	results := make([]MatchResult, 0, len(partyMatches))
 
 	for _, result := range partyMatches {
-		// Get transaction stats for this bank
-		stats, err := m.queries.GetPartyWithTransactionCountByBank(ctx, sqlc.GetPartyWithTransactionCountByBankParams{
-			Bank: bank,
-			ID:   result.Party.ID,
-		})
-		if err == nil {
-			result.TransactionCount = stats.TransactionCount
-			if amount, ok := stats.TotalAmount.(float64); ok {
-				result.TotalAmount = amount
+		// Aggregate stats from all party IDs
+		var totalTxCount int64
+		var totalAmount float64
+		var allRecentTxns []sqlc.Transaction
+
+		for _, partyID := range result.PartyIDs {
+			stats, err := m.queries.GetPartyWithTransactionCountByBank(ctx, sqlc.GetPartyWithTransactionCountByBankParams{
+				Bank: bank,
+				ID:   partyID,
+			})
+			if err == nil {
+				totalTxCount += stats.TransactionCount
+				if amount, ok := stats.TotalAmount.(float64); ok {
+					totalAmount += amount
+				}
 			}
 
-			// Apply history boost
-			if stats.TransactionCount > 0 {
-				historyBoost := 1.0 + math.Log10(float64(stats.TransactionCount))*0.1
-				result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			// Get recent transactions for this party ID and bank
+			recentTxns, err := m.queries.GetRecentTransactionsByPartyIDAndBank(ctx, sqlc.GetRecentTransactionsByPartyIDAndBankParams{
+				PartyID: partyID,
+				Bank:    bank,
+				Limit:   5,
+			})
+			if err == nil {
+				allRecentTxns = append(allRecentTxns, recentTxns...)
 			}
 		}
 
-		// Get recent transactions for this bank
-		recentTxns, err := m.queries.GetRecentTransactionsByPartyIDAndBank(ctx, sqlc.GetRecentTransactionsByPartyIDAndBankParams{
-			PartyID: result.Party.ID,
-			Bank:    bank,
-			Limit:   5,
+		result.TransactionCount = totalTxCount
+		result.TotalAmount = totalAmount
+
+		// Sort all recent transactions by date and limit to 5
+		sort.Slice(allRecentTxns, func(i, j int) bool {
+			return allRecentTxns[i].TransactionDate.After(allRecentTxns[j].TransactionDate)
 		})
-		if err == nil {
-			result.RecentTxns = recentTxns
+		if len(allRecentTxns) > 5 {
+			allRecentTxns = allRecentTxns[:5]
+		}
+		result.RecentTxns = allRecentTxns
+
+		// Apply history boost
+		if totalTxCount > 0 {
+			historyBoost := 1.0 + math.Log10(float64(totalTxCount))*0.1
+			result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
 		}
 
 		results = append(results, *result)
@@ -456,7 +537,8 @@ func (m *Matcher) matchByNarration(ctx context.Context, narration string, identi
 	}
 
 	// Query for each pattern and collect results
-	partyMatches := make(map[int64]*MatchResult)
+	// Group by party name (not ID)
+	partyMatches := make(map[string]*MatchResult)
 
 	for _, pattern := range patterns {
 		matches, err := m.queries.FindPartiesByNarrationPattern(ctx, sql.NullString{String: pattern, Valid: true})
@@ -465,19 +547,26 @@ func (m *Matcher) matchByNarration(ctx context.Context, narration string, identi
 		}
 
 		for _, match := range matches {
-			if _, exists := partyMatches[match.ID]; !exists {
-				partyMatches[match.ID] = &MatchResult{
+			result, exists := partyMatches[match.Name]
+			if !exists {
+				partyMatches[match.Name] = &MatchResult{
 					Party: sqlc.Party{
 						ID:        match.ID,
 						Name:      match.Name,
 						Location:  match.Location,
 						CreatedAt: match.CreatedAt,
 					},
+					PartyIDs:   []int64{match.ID},
 					Confidence: 40, // Lower confidence for narration-based matches
 					MatchedOn: []MatchedIdentifier{{
 						Type:  "narration",
 						Value: strings.TrimPrefix(strings.TrimSuffix(pattern, "%"), "%"),
 					}},
+				}
+			} else {
+				// Add party ID if not already present
+				if !containsInt64(result.PartyIDs, match.ID) {
+					result.PartyIDs = append(result.PartyIDs, match.ID)
 				}
 			}
 		}
@@ -487,28 +576,46 @@ func (m *Matcher) matchByNarration(ctx context.Context, narration string, identi
 	results := make([]MatchResult, 0, len(partyMatches))
 
 	for _, result := range partyMatches {
-		// Get transaction stats
-		stats, err := m.queries.GetPartyWithTransactionCount(ctx, result.Party.ID)
-		if err == nil {
-			result.TransactionCount = stats.TransactionCount
-			if stats.TotalAmount.Valid {
-				result.TotalAmount = stats.TotalAmount.Float64
+		// Aggregate stats from all party IDs
+		var totalTxCount int64
+		var totalAmount float64
+		var allRecentTxns []sqlc.Transaction
+
+		for _, partyID := range result.PartyIDs {
+			stats, err := m.queries.GetPartyWithTransactionCount(ctx, partyID)
+			if err == nil {
+				totalTxCount += stats.TransactionCount
+				if stats.TotalAmount.Valid {
+					totalAmount += stats.TotalAmount.Float64
+				}
 			}
 
-			// Apply history boost
-			if stats.TransactionCount > 0 {
-				historyBoost := 1.0 + math.Log10(float64(stats.TransactionCount))*0.1
-				result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			// Get recent transactions for this party ID
+			recentTxns, err := m.queries.GetRecentTransactionsByPartyID(ctx, sqlc.GetRecentTransactionsByPartyIDParams{
+				PartyID: partyID,
+				Limit:   5,
+			})
+			if err == nil {
+				allRecentTxns = append(allRecentTxns, recentTxns...)
 			}
 		}
 
-		// Get recent transactions
-		recentTxns, err := m.queries.GetRecentTransactionsByPartyID(ctx, sqlc.GetRecentTransactionsByPartyIDParams{
-			PartyID: result.Party.ID,
-			Limit:   5,
+		result.TransactionCount = totalTxCount
+		result.TotalAmount = totalAmount
+
+		// Sort all recent transactions by date and limit to 5
+		sort.Slice(allRecentTxns, func(i, j int) bool {
+			return allRecentTxns[i].TransactionDate.After(allRecentTxns[j].TransactionDate)
 		})
-		if err == nil {
-			result.RecentTxns = recentTxns
+		if len(allRecentTxns) > 5 {
+			allRecentTxns = allRecentTxns[:5]
+		}
+		result.RecentTxns = allRecentTxns
+
+		// Apply history boost
+		if totalTxCount > 0 {
+			historyBoost := 1.0 + math.Log10(float64(totalTxCount))*0.1
+			result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
 		}
 
 		results = append(results, *result)
@@ -520,4 +627,24 @@ func (m *Matcher) matchByNarration(ctx context.Context, narration string, identi
 	})
 
 	return results, nil
+}
+
+// containsInt64 checks if a slice contains a value
+func containsInt64(slice []int64, val int64) bool {
+	for _, v := range slice {
+		if v == val {
+			return true
+		}
+	}
+	return false
+}
+
+// containsIdentifier checks if an identifier is already in the slice
+func containsIdentifier(slice []MatchedIdentifier, id MatchedIdentifier) bool {
+	for _, v := range slice {
+		if v.Type == id.Type && v.Value == id.Value {
+			return true
+		}
+	}
+	return false
 }

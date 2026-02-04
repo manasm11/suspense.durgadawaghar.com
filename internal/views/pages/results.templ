@@ -23,6 +23,11 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 						<span class="location">({ result.Party.Location.String })</span>
 					}
 				</h3>
+				if len(result.PartyIDs) > 1 {
+					<p class="merged-note">
+						<em>Combined from { fmt.Sprintf("%d", len(result.PartyIDs)) } records</em>
+					</p>
+				}
 				<p>
 					<strong>Confidence: </strong>
 					<span class={ confidenceClass(result.Confidence) }>
