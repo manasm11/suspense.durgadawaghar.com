@@ -35,11 +35,13 @@ type SaleBill struct {
 }
 
 type Transaction struct {
-	ID              int64
-	PartyID         int64
-	Amount          float64
-	TransactionDate time.Time
-	PaymentMode     sql.NullString
-	Narration       sql.NullString
-	CreatedAt       sql.NullTime
+	ID               int64
+	PartyID          int64
+	Amount           float64
+	TransactionDate  time.Time
+	PaymentMode      sql.NullString
+	Narration        sql.NullString
+	CashBankCode     sql.NullString
+	CashBankLocation sql.NullString
+	CreatedAt        sql.NullTime
 }

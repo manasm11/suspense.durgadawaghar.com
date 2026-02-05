@@ -9,12 +9,14 @@ import (
 
 // Transaction represents a parsed receipt book transaction
 type Transaction struct {
-	Date        time.Time
-	PartyName   string
-	Location    string
-	Amount      float64
-	Narration   string // Combined bank account info and payment details
-	PaymentMode string
+	Date             time.Time
+	PartyName        string
+	Location         string
+	Amount           float64
+	Narration        string // Combined bank account info and payment details
+	PaymentMode      string
+	CashBankCode     string // Bank code from cash deposits (e.g., "733300")
+	CashBankLocation string // Bank location from cash deposits (e.g., "TIRWA (UP)")
 }
 
 var (
@@ -68,6 +70,10 @@ var (
 	posModePattern  = regexp.MustCompile(`(?i)FT-MESPOS|MESPOS\s+SET|POS\s+MACHINE`)
 	cashModePattern = regexp.MustCompile(`(?i)^BY\s+CASH|\sBY\s+CASH|CASH\s+DEP|CAM/`)
 
+	// Cash deposit pattern: captures bank code and location with optional state
+	// Example: "BY CASH -733300 TIRWA (UP)" -> code="733300", location="TIRWA (UP)"
+	cashDepositPattern = regexp.MustCompile(`BY\s+CASH\s+-(\d+)\s+([A-Z][A-Za-z]*(?:\s+\([A-Z]{2}\))?)`)
+
 	// Invoice reference pattern to ignore: "Ag. DDG...", "Ag. *DDG028429,*DDG028437,...", "Ag. DDGT000180", etc.
 	// Matches everything after "Ag." since it's all invoice reference data
 	invoiceRefPattern = regexp.MustCompile(`\s*Ag\.\s*.*$`)
@@ -111,6 +117,9 @@ func Parse(text string, year int) []Transaction {
 			if currentTx != nil {
 				currentTx.Narration = buildNarration(narrationLines)
 				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
+				if currentTx.PaymentMode == "CASH" {
+					currentTx.CashBankCode, currentTx.CashBankLocation = extractCashDepositInfo(currentTx.Narration)
+				}
 				transactions = append(transactions, *currentTx)
 			}
 
@@ -140,6 +149,9 @@ func Parse(text string, year int) []Transaction {
 				// Save current transaction
 				currentTx.Narration = buildNarration(narrationLines)
 				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
+				if currentTx.PaymentMode == "CASH" {
+					currentTx.CashBankCode, currentTx.CashBankLocation = extractCashDepositInfo(currentTx.Narration)
+				}
 				transactions = append(transactions, *currentTx)
 
 				// Create new transaction with inherited date
@@ -168,6 +180,9 @@ func Parse(text string, year int) []Transaction {
 	if currentTx != nil {
 		currentTx.Narration = buildNarration(narrationLines)
 		currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
+		if currentTx.PaymentMode == "CASH" {
+			currentTx.CashBankCode, currentTx.CashBankLocation = extractCashDepositInfo(currentTx.Narration)
+		}
 		transactions = append(transactions, *currentTx)
 	}
 
@@ -397,6 +412,16 @@ func parsePartyNameLocation(text string) (name, location string) {
 
 func buildNarration(lines []string) string {
 	return strings.Join(lines, " ")
+}
+
+// extractCashDepositInfo extracts bank code and location from cash deposit narrations
+// Example: "BY CASH -733300 TIRWA (UP)" -> "733300", "TIRWA (UP)"
+func extractCashDepositInfo(narration string) (bankCode string, bankLocation string) {
+	matches := cashDepositPattern.FindStringSubmatch(narration)
+	if len(matches) >= 3 {
+		return matches[1], strings.TrimSpace(matches[2])
+	}
+	return "", ""
 }
 
 func detectPaymentMode(narration string) string {

@@ -37,8 +37,8 @@ JOIN identifiers i ON p.id = i.party_id
 WHERE i.value IN (sqlc.slice('values'));
 
 -- name: CreateTransaction :one
-INSERT INTO transactions (party_id, amount, transaction_date, payment_mode, narration)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO transactions (party_id, amount, transaction_date, payment_mode, narration, cash_bank_code, cash_bank_location)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetTransactionsByPartyID :many

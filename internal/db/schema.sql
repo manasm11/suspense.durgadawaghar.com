@@ -24,6 +24,8 @@ CREATE TABLE transactions (
     transaction_date DATE NOT NULL,
     payment_mode TEXT,
     narration TEXT,
+    cash_bank_code TEXT,
+    cash_bank_location TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

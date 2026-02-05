@@ -212,11 +212,13 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 
 	// Insert transaction
 	_, err := h.queries.CreateTransaction(ctx, sqlc.CreateTransactionParams{
-		PartyID:         partyID,
-		Amount:          tx.Amount,
-		TransactionDate: tx.Date,
-		PaymentMode:     sql.NullString{String: tx.PaymentMode, Valid: tx.PaymentMode != ""},
-		Narration:       sql.NullString{String: tx.Narration, Valid: tx.Narration != ""},
+		PartyID:          partyID,
+		Amount:           tx.Amount,
+		TransactionDate:  tx.Date,
+		PaymentMode:      sql.NullString{String: tx.PaymentMode, Valid: tx.PaymentMode != ""},
+		Narration:        sql.NullString{String: tx.Narration, Valid: tx.Narration != ""},
+		CashBankCode:     sql.NullString{String: tx.CashBankCode, Valid: tx.CashBankCode != ""},
+		CashBankLocation: sql.NullString{String: tx.CashBankLocation, Valid: tx.CashBankLocation != ""},
 	})
 	if err != nil {
 		// Check for UNIQUE constraint violation (SQLite error)

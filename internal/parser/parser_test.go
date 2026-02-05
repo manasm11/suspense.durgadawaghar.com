@@ -1242,6 +1242,123 @@ Chq.704339 Dt. 26-12-2025`,
 	}
 }
 
+func TestExtractCashDepositInfo(t *testing.T) {
+	tests := []struct {
+		name             string
+		narration        string
+		wantBankCode     string
+		wantBankLocation string
+	}{
+		{
+			name:             "Standard cash deposit with state",
+			narration:        "BY CASH -733300 TIRWA (UP)",
+			wantBankCode:     "733300",
+			wantBankLocation: "TIRWA (UP)",
+		},
+		{
+			name:             "Cash deposit without state",
+			narration:        "BY CASH -123456 KANPUR",
+			wantBankCode:     "123456",
+			wantBankLocation: "KANPUR",
+		},
+		{
+			name:             "Cash deposit with invoice reference",
+			narration:        "BY CASH -733300 TIRWA (UP) Ag. DDG000201",
+			wantBankCode:     "733300",
+			wantBankLocation: "TIRWA (UP)",
+		},
+		{
+			name:             "Cash deposit with longer code",
+			narration:        "BY CASH -1234567 LUCKNOW (UP)",
+			wantBankCode:     "1234567",
+			wantBankLocation: "LUCKNOW (UP)",
+		},
+		{
+			name:             "Non-cash deposit narration",
+			narration:        "UPI/545843195657/UPI/ALOK7860855471@/PUNJAB NATIONAL",
+			wantBankCode:     "",
+			wantBankLocation: "",
+		},
+		{
+			name:             "Cash deposit without bank code",
+			narration:        "BY CASH -KANPUR - BIRHANA ROAD MANISHA",
+			wantBankCode:     "",
+			wantBankLocation: "",
+		},
+		{
+			name:             "Empty narration",
+			narration:        "",
+			wantBankCode:     "",
+			wantBankLocation: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotCode, gotLocation := extractCashDepositInfo(tt.narration)
+			if gotCode != tt.wantBankCode {
+				t.Errorf("extractCashDepositInfo() bankCode = %q, want %q", gotCode, tt.wantBankCode)
+			}
+			if gotLocation != tt.wantBankLocation {
+				t.Errorf("extractCashDepositInfo() bankLocation = %q, want %q", gotLocation, tt.wantBankLocation)
+			}
+		})
+	}
+}
+
+func TestParseCashDepositTransaction(t *testing.T) {
+	// Test that cash deposit transactions get their bank code and location extracted
+	input := `Dec 26 CASH 50000.00
+ICICI 192105002017 50000.00
+BY CASH -733300 TIRWA (UP) Ag. DDG000201`
+
+	transactions := Parse(input, 2025)
+
+	if len(transactions) != 1 {
+		t.Errorf("Expected 1 transaction, got %d", len(transactions))
+	}
+
+	if len(transactions) > 0 {
+		tx := transactions[0]
+		if tx.PaymentMode != "CASH" {
+			t.Errorf("Expected payment mode 'CASH', got '%s'", tx.PaymentMode)
+		}
+		if tx.CashBankCode != "733300" {
+			t.Errorf("Expected CashBankCode '733300', got '%s'", tx.CashBankCode)
+		}
+		if tx.CashBankLocation != "TIRWA (UP)" {
+			t.Errorf("Expected CashBankLocation 'TIRWA (UP)', got '%s'", tx.CashBankLocation)
+		}
+	}
+}
+
+func TestParseCashDepositWithoutBankCode(t *testing.T) {
+	// Test cash deposit without bank code (older format)
+	input := `May 1 CASH 226000.00
+ICICI 192105002017 226000.00
+BY CASH -KANPUR - BIRHANA ROAD MANISHA`
+
+	transactions := Parse(input, 2025)
+
+	if len(transactions) != 1 {
+		t.Errorf("Expected 1 transaction, got %d", len(transactions))
+	}
+
+	if len(transactions) > 0 {
+		tx := transactions[0]
+		if tx.PaymentMode != "CASH" {
+			t.Errorf("Expected payment mode 'CASH', got '%s'", tx.PaymentMode)
+		}
+		// Should have empty bank code and location for this format
+		if tx.CashBankCode != "" {
+			t.Errorf("Expected empty CashBankCode, got '%s'", tx.CashBankCode)
+		}
+		if tx.CashBankLocation != "" {
+			t.Errorf("Expected empty CashBankLocation, got '%s'", tx.CashBankLocation)
+		}
+	}
+}
+
 func TestDetectPaymentMode(t *testing.T) {
 	tests := []struct {
 		name      string

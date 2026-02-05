@@ -108,17 +108,19 @@ func (q *Queries) CreateSaleBill(ctx context.Context, arg CreateSaleBillParams) 
 }
 
 const createTransaction = `-- name: CreateTransaction :one
-INSERT INTO transactions (party_id, amount, transaction_date, payment_mode, narration)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, party_id, amount, transaction_date, payment_mode, narration, created_at
+INSERT INTO transactions (party_id, amount, transaction_date, payment_mode, narration, cash_bank_code, cash_bank_location)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, party_id, amount, transaction_date, payment_mode, narration, cash_bank_code, cash_bank_location, created_at
 `
 
 type CreateTransactionParams struct {
-	PartyID         int64
-	Amount          float64
-	TransactionDate time.Time
-	PaymentMode     sql.NullString
-	Narration       sql.NullString
+	PartyID          int64
+	Amount           float64
+	TransactionDate  time.Time
+	PaymentMode      sql.NullString
+	Narration        sql.NullString
+	CashBankCode     sql.NullString
+	CashBankLocation sql.NullString
 }
 
 func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error) {
@@ -128,6 +130,8 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		arg.TransactionDate,
 		arg.PaymentMode,
 		arg.Narration,
+		arg.CashBankCode,
+		arg.CashBankLocation,
 	)
 	var i Transaction
 	err := row.Scan(
@@ -137,6 +141,8 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.TransactionDate,
 		&i.PaymentMode,
 		&i.Narration,
+		&i.CashBankCode,
+		&i.CashBankLocation,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -455,7 +461,7 @@ func (q *Queries) GetPartyWithTransactionCount(ctx context.Context, id int64) (G
 }
 
 const getRecentTransactionsByPartyID = `-- name: GetRecentTransactionsByPartyID :many
-SELECT id, party_id, amount, transaction_date, payment_mode, narration, created_at FROM transactions
+SELECT id, party_id, amount, transaction_date, payment_mode, narration, cash_bank_code, cash_bank_location, created_at FROM transactions
 WHERE party_id = ?
 ORDER BY transaction_date DESC
 LIMIT ?
@@ -482,6 +488,8 @@ func (q *Queries) GetRecentTransactionsByPartyID(ctx context.Context, arg GetRec
 			&i.TransactionDate,
 			&i.PaymentMode,
 			&i.Narration,
+			&i.CashBankCode,
+			&i.CashBankLocation,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -498,7 +506,7 @@ func (q *Queries) GetRecentTransactionsByPartyID(ctx context.Context, arg GetRec
 }
 
 const getTransactionsByPartyID = `-- name: GetTransactionsByPartyID :many
-SELECT id, party_id, amount, transaction_date, payment_mode, narration, created_at FROM transactions
+SELECT id, party_id, amount, transaction_date, payment_mode, narration, cash_bank_code, cash_bank_location, created_at FROM transactions
 WHERE party_id = ?
 ORDER BY transaction_date DESC
 `
@@ -519,6 +527,8 @@ func (q *Queries) GetTransactionsByPartyID(ctx context.Context, partyID int64) (
 			&i.TransactionDate,
 			&i.PaymentMode,
 			&i.Narration,
+			&i.CashBankCode,
+			&i.CashBankLocation,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
