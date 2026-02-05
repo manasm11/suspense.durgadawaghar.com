@@ -54,18 +54,13 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	narration := r.FormValue("narration")
-	bank := r.FormValue("bank")
 
-	if bank == "" {
-		w.Write([]byte(`<div class="error">Please select a bank.</div>`))
-		return
-	}
 	if narration == "" {
 		w.Write([]byte(`<div class="error">Please enter a narration to search.</div>`))
 		return
 	}
 
-	results, err := h.matcher.MatchWithBank(r.Context(), narration, bank)
+	results, err := h.matcher.Match(r.Context(), narration)
 	if err != nil {
 		w.Write([]byte(fmt.Sprintf(`<div class="error">Search error: %s</div>`, err.Error())))
 		return
@@ -96,9 +91,19 @@ func (h *Handler) ImportPreview(w http.ResponseWriter, r *http.Request) {
 
 	data := r.FormValue("data")
 	yearStr := r.FormValue("year")
-	year := 2025
-	if y, err := strconv.Atoi(yearStr); err == nil {
+
+	// Try to extract year from header first
+	extractedYear := parser.ExtractYearFromHeader(data)
+
+	// Determine which year to use
+	year := time.Now().Year() // Default to current year
+	if extractedYear > 0 {
+		year = extractedYear
+	}
+	// User-provided year overrides extraction (if different from default)
+	if y, err := strconv.Atoi(yearStr); err == nil && y != time.Now().Year() {
 		year = y
+		extractedYear = 0 // Don't show "auto-detected" if user overrode it
 	}
 
 	transactions := parser.Parse(data, year)
@@ -117,12 +122,11 @@ func (h *Handler) ImportPreview(w http.ResponseWriter, r *http.Request) {
 			Location:    tx.Location,
 			Amount:      fmt.Sprintf("%.2f", tx.Amount),
 			PaymentMode: tx.PaymentMode,
-			Bank:        tx.Bank,
 			Identifiers: previewIDs,
 		}
 	}
 
-	pages.ImportPreview(previewTxns, data, year).Render(r.Context(), w)
+	pages.ImportPreview(previewTxns, data, year, extractedYear).Render(r.Context(), w)
 }
 
 // ImportConfirm executes the import
@@ -134,7 +138,9 @@ func (h *Handler) ImportConfirm(w http.ResponseWriter, r *http.Request) {
 
 	data := r.FormValue("data")
 	yearStr := r.FormValue("year")
-	year := 2025
+
+	// Use the year from the form (which was already set correctly in preview)
+	year := time.Now().Year()
 	if y, err := strconv.Atoi(yearStr); err == nil {
 		year = y
 	}
@@ -211,7 +217,6 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 		TransactionDate: tx.Date,
 		PaymentMode:     sql.NullString{String: tx.PaymentMode, Valid: tx.PaymentMode != ""},
 		Narration:       sql.NullString{String: tx.Narration, Valid: tx.Narration != ""},
-		Bank:            tx.Bank,
 	})
 	if err != nil {
 		// Check for UNIQUE constraint violation (SQLite error)

@@ -7,12 +7,6 @@ templ Home() {
 		<h2>Search by Bank Narration</h2>
 		<p>Paste a bank statement narration to find matching parties from your receipt book data.</p>
 		<form>
-			<label for="bank">Select Bank</label>
-			<select id="bank" name="bank" required>
-				<option value="">-- Select Bank --</option>
-				<option value="ICICI" selected>ICICI Bank</option>
-				<option value="HDFC">HDFC Bank</option>
-			</select>
 			<label for="narration">Bank Narration</label>
 			<input
 				type="text"
@@ -23,7 +17,6 @@ templ Home() {
 				hx-target="#results"
 				hx-trigger="input changed delay:300ms, paste changed delay:100ms"
 				hx-indicator="#loading"
-				hx-include="#bank"
 				autofocus
 			/>
 			<span id="loading" class="htmx-indicator">Searching...</span>

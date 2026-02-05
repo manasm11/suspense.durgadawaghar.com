@@ -24,18 +24,16 @@ CREATE TABLE transactions (
     transaction_date DATE NOT NULL,
     payment_mode TEXT,
     narration TEXT,
-    bank TEXT NOT NULL DEFAULT 'ICICI',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_identifiers_value ON identifiers(value);
 CREATE INDEX idx_identifiers_type_value ON identifiers(type, value);
 CREATE INDEX idx_transactions_party_id ON transactions(party_id);
-CREATE INDEX idx_transactions_bank ON transactions(bank);
 
 -- Unique constraint to prevent duplicate transactions
 CREATE UNIQUE INDEX idx_transactions_unique
-ON transactions(party_id, amount, transaction_date, payment_mode, narration, bank);
+ON transactions(party_id, amount, transaction_date, payment_mode, narration);
 
 -- sale_bills: imported sale bill entries
 CREATE TABLE sale_bills (

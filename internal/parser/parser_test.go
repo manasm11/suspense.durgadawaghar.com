@@ -1178,6 +1178,70 @@ SUB TOTAL 36000.00 36000.00
 	}
 }
 
+func TestExtractYearFromHeader(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{
+			name:     "Standard header",
+			input:    "01-08-2024 - 31-08-2024",
+			expected: 2024,
+		},
+		{
+			name: "Header with page number",
+			input: `RECEIPT BOOK
+01-10-2025 - 31-10-2025 Page No..1
+------------------------------------------------------------------------------`,
+			expected: 2025,
+		},
+		{
+			name:     "Year-spanning period (Dec to Jan)",
+			input:    "15-12-2023 - 15-01-2024",
+			expected: 2024, // Uses TO year
+		},
+		{
+			name: "Full receipt book header",
+			input: `DURGA DAWA GHAR (PARTNER)
+60/33,PURANI DAL MANDI KANPUR
+E-Mail : durgadawaghar2022@gmail.com
+D.L.No. : UP7820B001680,UP7821B001673
+GSTIN : 09AATFD8891P1Z2
+RECEIPT BOOK
+01-04-2025 - 30-04-2025
+------------------------------------------------------------------------------`,
+			expected: 2025,
+		},
+		{
+			name:     "No header found",
+			input:    "Some random text without date range",
+			expected: 0,
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: 0,
+		},
+		{
+			name: "Only transaction data without header",
+			input: `Dec 26 BABA MEDICAL AND GENERAL STOR SHAMBHUA 11744.00
+ICICI 192105002017 11744.00
+Chq.704339 Dt. 26-12-2025`,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractYearFromHeader(tt.input)
+			if got != tt.expected {
+				t.Errorf("ExtractYearFromHeader() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestDetectPaymentMode(t *testing.T) {
 	tests := []struct {
 		name      string

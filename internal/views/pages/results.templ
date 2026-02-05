@@ -52,7 +52,6 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 								<tr>
 									<th>Date</th>
 									<th>Amount</th>
-									<th>Bank</th>
 									<th>Mode</th>
 								</tr>
 							</thead>
@@ -61,7 +60,6 @@ templ SearchResults(results []matcher.MatchResult, narration string) {
 									<tr>
 										<td>{ txn.TransactionDate.Format("02 Jan 2006") }</td>
 										<td>₹{ fmt.Sprintf("%.2f", txn.Amount) }</td>
-										<td>{ txn.Bank }</td>
 										<td>{ txn.PaymentMode.String }</td>
 									</tr>
 								}

@@ -56,7 +56,6 @@ templ ImportPreview(transactions []PreviewTransaction, rawData string, year int,
 						<th>Party Name</th>
 						<th>Location</th>
 						<th>Amount</th>
-						<th>Bank</th>
 						<th>Payment Mode</th>
 						<th>Identifiers Found</th>
 					</tr>
@@ -68,7 +67,6 @@ templ ImportPreview(transactions []PreviewTransaction, rawData string, year int,
 							<td>{ tx.PartyName }</td>
 							<td>{ tx.Location }</td>
 							<td>{ tx.Amount }</td>
-							<td>{ tx.Bank }</td>
 							<td>{ tx.PaymentMode }</td>
 							<td>
 								for _, id := range tx.Identifiers {
@@ -124,7 +122,6 @@ type PreviewTransaction struct {
 	Location    string
 	Amount      string
 	PaymentMode string
-	Bank        string
 	Identifiers []PreviewIdentifier
 }
 

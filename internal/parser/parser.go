@@ -15,12 +15,15 @@ type Transaction struct {
 	Amount      float64
 	Narration   string // Combined bank account info and payment details
 	PaymentMode string
-	Bank        string // Receiving bank (ICICI, HDFC, etc.)
 }
 
 var (
 	// Date pattern: "Dec 26", "Jan 1", etc.
 	datePattern = regexp.MustCompile(`^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+`)
+
+	// Receipt book header date range pattern: "01-08-2024 - 31-08-2024"
+	// Captures the year from both dates (we use the second/TO date)
+	receiptBookHeaderPattern = regexp.MustCompile(`^\d{2}-\d{2}-(\d{4})\s+-\s+\d{2}-\d{2}-(\d{4})`)
 
 	// Amount pattern: number with optional decimal at end of line
 	amountPattern = regexp.MustCompile(`(\d+(?:\.\d{2})?)\s*$`)
@@ -108,9 +111,6 @@ func Parse(text string, year int) []Transaction {
 			if currentTx != nil {
 				currentTx.Narration = buildNarration(narrationLines)
 				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
-				if currentTx.Bank == "" {
-					currentTx.Bank = "ICICI" // Default bank
-				}
 				transactions = append(transactions, *currentTx)
 			}
 
@@ -127,10 +127,6 @@ func Parse(text string, year int) []Transaction {
 		} else if currentTx != nil {
 			// Check if this is a bank account line (should be added to narration)
 			if bankAccountPattern.MatchString(line) {
-				// Extract bank name from the bank account line
-				if match := bankAccountPattern.FindStringSubmatch(line); match != nil && currentTx.Bank == "" {
-					currentTx.Bank = strings.ToUpper(match[1])
-				}
 				cleanLine := invoiceRefPattern.ReplaceAllString(line, "")
 				cleanLine = strings.TrimSpace(cleanLine)
 				if cleanLine != "" {
@@ -144,9 +140,6 @@ func Parse(text string, year int) []Transaction {
 				// Save current transaction
 				currentTx.Narration = buildNarration(narrationLines)
 				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
-				if currentTx.Bank == "" {
-					currentTx.Bank = "ICICI" // Default bank
-				}
 				transactions = append(transactions, *currentTx)
 
 				// Create new transaction with inherited date
@@ -175,9 +168,6 @@ func Parse(text string, year int) []Transaction {
 	if currentTx != nil {
 		currentTx.Narration = buildNarration(narrationLines)
 		currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
-		if currentTx.Bank == "" {
-			currentTx.Bank = "ICICI" // Default bank
-		}
 		transactions = append(transactions, *currentTx)
 	}
 
@@ -443,10 +433,32 @@ func detectPaymentMode(narration string) string {
 	return "OTHER"
 }
 
+// ExtractYearFromHeader extracts the year from the receipt book header date range.
+// Header format: "01-08-2024 - 31-08-2024" (with optional page number suffix)
+// Returns the year from the "TO" date (second date), or 0 if not found.
+// Using the TO date handles year-spanning periods correctly (Dec 2023 - Jan 2024 uses 2024).
+func ExtractYearFromHeader(text string) int {
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if match := receiptBookHeaderPattern.FindStringSubmatch(line); match != nil {
+			// match[2] is the year from the TO date (second date)
+			if year, err := strconv.Atoi(match[2]); err == nil {
+				return year
+			}
+		}
+	}
+	return 0
+}
+
 // ParseWithAutoYear parses receipt book text and auto-detects year from content
 // or uses the current year as default
 func ParseWithAutoYear(text string) []Transaction {
-	// Try to find year in text (e.g., "26-12-2025")
+	// Try to extract year from header first
+	if year := ExtractYearFromHeader(text); year > 0 {
+		return Parse(text, year)
+	}
+	// Fallback: Try to find year in text (e.g., "26-12-2025")
 	yearPattern := regexp.MustCompile(`\d{2}-\d{2}-(\d{4})`)
 	if match := yearPattern.FindStringSubmatch(text); match != nil {
 		if year, err := strconv.Atoi(match[1]); err == nil {

@@ -77,21 +77,61 @@ func initDB(dbPath string) (*sql.DB, error) {
 }
 
 func migrateDB(db *sql.DB) error {
-	// Check if bank column exists by trying to query it
+	// Check if bank column exists and remove it
 	_, err := db.Exec("SELECT bank FROM transactions LIMIT 1")
-	if err != nil {
-		// Column doesn't exist, add it with default ICICI
-		_, err = db.Exec("ALTER TABLE transactions ADD COLUMN bank TEXT NOT NULL DEFAULT 'ICICI'")
-		if err != nil {
-			return fmt.Errorf("adding bank column: %w", err)
-		}
-		log.Printf("Migration: Added bank column, existing records set to ICICI")
+	if err == nil {
+		// Bank column exists, need to drop it
+		// SQLite doesn't support DROP COLUMN directly, need to recreate table
+		log.Printf("Migration: Removing bank column from transactions table...")
 
-		// Create index for bank column
-		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_transactions_bank ON transactions(bank)")
+		// Create new table without bank column
+		_, err = db.Exec(`
+			CREATE TABLE IF NOT EXISTS transactions_new (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				party_id INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+				amount REAL NOT NULL,
+				transaction_date DATE NOT NULL,
+				payment_mode TEXT,
+				narration TEXT,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			)
+		`)
 		if err != nil {
-			log.Printf("Migration: Warning - could not create bank index: %v", err)
+			return fmt.Errorf("creating new transactions table: %w", err)
 		}
+
+		// Copy data (INSERT OR IGNORE handles duplicates from tighter unique constraint)
+		_, err = db.Exec(`
+			INSERT OR IGNORE INTO transactions_new (id, party_id, amount, transaction_date, payment_mode, narration, created_at)
+			SELECT id, party_id, amount, transaction_date, payment_mode, narration, created_at FROM transactions
+		`)
+		if err != nil {
+			return fmt.Errorf("copying transactions data: %w", err)
+		}
+
+		// Drop old table
+		_, err = db.Exec("DROP TABLE transactions")
+		if err != nil {
+			return fmt.Errorf("dropping old transactions table: %w", err)
+		}
+
+		// Rename new table
+		_, err = db.Exec("ALTER TABLE transactions_new RENAME TO transactions")
+		if err != nil {
+			return fmt.Errorf("renaming transactions table: %w", err)
+		}
+
+		// Recreate indexes
+		_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_transactions_party_id ON transactions(party_id)")
+		if err != nil {
+			log.Printf("Migration: Warning - could not create party_id index: %v", err)
+		}
+		_, err = db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_unique ON transactions(party_id, amount, transaction_date, payment_mode, narration)")
+		if err != nil {
+			log.Printf("Migration: Warning - could not create unique index: %v", err)
+		}
+
+		log.Printf("Migration: Removed bank column from transactions table")
 	}
 
 	// Migrate sale_bills table
@@ -157,7 +197,7 @@ CREATE TABLE IF NOT EXISTS parties (
 CREATE TABLE IF NOT EXISTS identifiers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     party_id INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
-    type TEXT NOT NULL CHECK (type IN ('upi_vpa', 'phone', 'account_number', 'ifsc', 'imps_name', 'bank_name')),
+    type TEXT NOT NULL CHECK (type IN ('upi_vpa', 'phone', 'account_number', 'ifsc', 'imps_name', 'bank_name', 'neft_name')),
     value TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(type, value)
@@ -171,14 +211,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     transaction_date DATE NOT NULL,
     payment_mode TEXT,
     narration TEXT,
-    bank TEXT NOT NULL DEFAULT 'ICICI',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_identifiers_value ON identifiers(value);
 CREATE INDEX IF NOT EXISTS idx_identifiers_type_value ON identifiers(type, value);
 CREATE INDEX IF NOT EXISTS idx_transactions_party_id ON transactions(party_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_bank ON transactions(bank);
 
 -- sale_bills: imported sale bill entries
 CREATE TABLE IF NOT EXISTS sale_bills (
