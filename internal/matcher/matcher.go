@@ -33,8 +33,11 @@ const (
 	UPIVPAWeight        = 0.95
 	PhoneWeight         = 0.85
 	AccountNumberWeight = 0.80
+	CashAgentCodeWeight = 0.75 // High - agent codes are unique to depositing agencies
+	CashBankCodeWeight  = 0.60 // Medium - branch codes are less unique
 	IMPSNameWeight      = 0.50 // Medium - names can be truncated/similar
 	NEFTNameWeight      = 0.50 // Medium - same as IMPS, names can be truncated
+	CashLocationWeight  = 0.30 // Low-Medium - many parties from same location
 	BankNameWeight      = 0.20 // Low - many parties use same bank
 )
 
@@ -195,6 +198,12 @@ func calculateConfidence(matches []MatchedIdentifier) float64 {
 			weight = PhoneWeight * 100
 		case string(extractor.TypeAccountNumber):
 			weight = AccountNumberWeight * 100
+		case string(extractor.TypeCashAgentCode):
+			weight = CashAgentCodeWeight * 100
+		case string(extractor.TypeCashBankCode):
+			weight = CashBankCodeWeight * 100
+		case string(extractor.TypeCashLocation):
+			weight = CashLocationWeight * 100
 		case string(extractor.TypeIMPSName):
 			weight = IMPSNameWeight * 100
 		case string(extractor.TypeNEFTName):

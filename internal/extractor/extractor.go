@@ -13,9 +13,12 @@ const (
 	TypePhone         IdentifierType = "phone"
 	TypeAccountNumber IdentifierType = "account_number"
 	TypeIFSC          IdentifierType = "ifsc"
-	TypeIMPSName      IdentifierType = "imps_name" // Sender/receiver name from IMPS
-	TypeBankName      IdentifierType = "bank_name" // Bank name from IMPS
-	TypeNEFTName      IdentifierType = "neft_name" // Sender/receiver name from NEFT
+	TypeIMPSName      IdentifierType = "imps_name"      // Sender/receiver name from IMPS
+	TypeBankName      IdentifierType = "bank_name"      // Bank name from IMPS
+	TypeNEFTName      IdentifierType = "neft_name"      // Sender/receiver name from NEFT
+	TypeCashBankCode  IdentifierType = "cash_bank_code"  // Bank code from cash deposits
+	TypeCashLocation  IdentifierType = "cash_location"   // Location from cash deposits (e.g., TIRWA (UP))
+	TypeCashAgentCode IdentifierType = "cash_agent_code" // Agent code from cash deposits (e.g., DDG000201)
 )
 
 // Identifier represents an extracted identifier from a narration
@@ -94,6 +97,21 @@ var (
 	// Example: BIL/INFT/EDC0857581/ SANJIT KUMAR
 	// Extracts the name after the reference
 	bilInftNamePattern = regexp.MustCompile(`BIL/INFT/[A-Z0-9]+/\s*([A-Z][A-Z\s]+)`)
+
+	// Cash deposit bank code pattern: BY CASH -<code> <location>
+	// Example: "BY CASH -733300 TIRWA (UP)" -> code="733300"
+	cashBankCodePattern = regexp.MustCompile(`BY\s+CASH\s+-(\d{5,8})`)
+
+	// Cash deposit location pattern: BY CASH -<code> <location>
+	// Example: "BY CASH -733300 TIRWA (UP)" -> location="TIRWA (UP)"
+	// Captures location name with optional state code in parentheses
+	cashLocationPattern = regexp.MustCompile(`BY\s+CASH\s+-\d{5,8}\s+([A-Z][A-Za-z]*(?:\s+\([A-Z]{2}\))?)`)
+
+	// Cash deposit agent code pattern: Ag. <code> or similar agent identifiers
+	// Example: "BY CASH -733300 TIRWA (UP) Ag. DDG000201" -> agent="DDG000201"
+	// Pattern matches alphanumeric codes that look like agent/agency identifiers
+	// Note: uses uppercase because we match against upperNarration
+	cashAgentCodePattern = regexp.MustCompile(`(?:AG\.?|AGT\.?|AGENCY)\s*([A-Z]{2,4}\d{6,10})`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -500,6 +518,47 @@ func Extract(narration string) []Identifier {
 			identifiers = append(identifiers, Identifier{
 				Type:  TypeNEFTName,
 				Value: neftName,
+			})
+		}
+	}
+
+	// Extract cash deposit bank code
+	if cashCodeMatches := cashBankCodePattern.FindStringSubmatch(upperNarration); len(cashCodeMatches) > 1 {
+		value := cashCodeMatches[1]
+		key := string(TypeCashBankCode) + ":" + value
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeCashBankCode,
+				Value: value,
+			})
+		}
+	}
+
+	// Extract cash deposit location
+	if locationMatches := cashLocationPattern.FindStringSubmatch(upperNarration); len(locationMatches) > 1 {
+		value := strings.TrimSpace(locationMatches[1])
+		if value != "" {
+			key := string(TypeCashLocation) + ":" + value
+			if !seen[key] {
+				seen[key] = true
+				identifiers = append(identifiers, Identifier{
+					Type:  TypeCashLocation,
+					Value: value,
+				})
+			}
+		}
+	}
+
+	// Extract cash deposit agent code
+	if agentMatches := cashAgentCodePattern.FindStringSubmatch(upperNarration); len(agentMatches) > 1 {
+		value := agentMatches[1]
+		key := string(TypeCashAgentCode) + ":" + value
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeCashAgentCode,
+				Value: value,
 			})
 		}
 	}

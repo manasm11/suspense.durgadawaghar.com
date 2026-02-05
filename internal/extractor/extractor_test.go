@@ -456,3 +456,150 @@ func TestExtractIFSC(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractCashBankCode(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "Standard cash deposit with state",
+			narration: "BY CASH -733300 TIRWA (UP) Ag. DDG000201",
+			want:      []string{"733300"},
+		},
+		{
+			name:      "Cash deposit without agent code",
+			narration: "BY CASH -123456 KANPUR",
+			want:      []string{"123456"},
+		},
+		{
+			name:      "Cash deposit with longer code",
+			narration: "BY CASH -1234567 LUCKNOW (UP)",
+			want:      []string{"1234567"},
+		},
+		{
+			name:      "Cash deposit without numeric bank code",
+			narration: "BY CASH -KANPUR - BIRHANA ROAD MANISHA",
+			want:      nil,
+		},
+		{
+			name:      "Non-cash narration (UPI)",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+		{
+			name:      "Non-cash narration (IMPS)",
+			narration: "MMT/IMPS/518211116991/OK/ANURAG SHA/HDFC BANK",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeCashBankCode)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestExtractCashLocation(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "Cash deposit with state code",
+			narration: "BY CASH -733300 TIRWA (UP) Ag. DDG000201",
+			want:      []string{"TIRWA (UP)"},
+		},
+		{
+			name:      "Cash deposit without state code",
+			narration: "BY CASH -123456 KANPUR",
+			want:      []string{"KANPUR"},
+		},
+		{
+			name:      "Cash deposit with longer location name",
+			narration: "BY CASH -1234567 LUCKNOW (UP)",
+			want:      []string{"LUCKNOW (UP)"},
+		},
+		{
+			name:      "Cash deposit without numeric bank code",
+			narration: "BY CASH -KANPUR - BIRHANA ROAD MANISHA",
+			want:      nil,
+		},
+		{
+			name:      "Non-cash narration",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeCashLocation)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestExtractCashAgentCode(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "Cash deposit with Ag. prefix",
+			narration: "BY CASH -733300 TIRWA (UP) Ag. DDG000201",
+			want:      []string{"DDG000201"},
+		},
+		{
+			name:      "Cash deposit with longer agent code",
+			narration: "BY CASH -733300 LUCKNOW (UP) Ag. ABCD1234567890",
+			want:      []string{"ABCD1234567890"},
+		},
+		{
+			name:      "Cash deposit without agent code",
+			narration: "BY CASH -123456 KANPUR",
+			want:      nil,
+		},
+		{
+			name:      "Non-cash narration",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeCashAgentCode)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
