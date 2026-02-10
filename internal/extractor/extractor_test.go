@@ -747,6 +747,50 @@ func TestExtractFromAccount(t *testing.T) {
 	}
 }
 
+func TestExtractActcdep(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "TRTR/ACTCDEP transaction",
+			narration: "TRTR/ACTCDEP/512916237776/FIK",
+			want:      []string{"ACTCDEP"},
+		},
+		{
+			name:      "TRTR/ACTCDEP with different ref",
+			narration: "TRTR/ACTCDEP/999999999999/ABC",
+			want:      []string{"ACTCDEP"},
+		},
+		{
+			name:      "Non-TRTR narration (UPI)",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+		{
+			name:      "Non-TRTR narration (IMPS)",
+			narration: "MMT/IMPS/518211116991/OK/ANURAG SHA/HDFC BANK",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeActcdep)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestExtractFromName(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -41,6 +41,7 @@ const (
 	FromNameWeight      = 0.50 // Medium - same as other name types
 	CashLocationWeight  = 0.30 // Low-Medium - many parties from same location
 	BankNameWeight      = 0.20 // Low - many parties use same bank
+	ActcdepWeight       = 0.20 // Low - many parties share ACTCDEP
 )
 
 // Matcher handles party matching logic
@@ -216,6 +217,8 @@ func calculateConfidence(matches []MatchedIdentifier) float64 {
 			weight = FromNameWeight * 100
 		case string(extractor.TypeBankName):
 			weight = BankNameWeight * 100
+		case string(extractor.TypeActcdep):
+			weight = ActcdepWeight * 100
 		default:
 			weight = 50 // Unknown type, moderate confidence
 		}

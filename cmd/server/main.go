@@ -134,11 +134,74 @@ func migrateDB(db *sql.DB) error {
 		log.Printf("Migration: Removed bank column from transactions table")
 	}
 
+	// Migrate identifiers table CHECK constraint to include all identifier types
+	if err := migrateIdentifiersTable(db); err != nil {
+		return fmt.Errorf("migrating identifiers table: %w", err)
+	}
+
 	// Migrate sale_bills table
 	if err := migrateSaleBillsTable(db); err != nil {
 		return fmt.Errorf("migrating sale_bills table: %w", err)
 	}
 
+	return nil
+}
+
+func migrateIdentifiersTable(db *sql.DB) error {
+	// Check if the identifiers table needs migration by trying to insert a test value
+	// with the new type. If it fails, the CHECK constraint is outdated.
+	_, err := db.Exec("INSERT INTO identifiers (party_id, type, value) VALUES (0, 'actcdep', '__migration_test__')")
+	if err == nil {
+		// Insert succeeded, clean up test row and return (constraint already allows new types)
+		db.Exec("DELETE FROM identifiers WHERE value = '__migration_test__'")
+		return nil
+	}
+	// If we get here, the CHECK constraint doesn't include 'actcdep', so migrate
+	log.Printf("Migration: Updating identifiers table CHECK constraint...")
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS identifiers_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			party_id INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+			type TEXT NOT NULL CHECK (type IN ('upi_vpa', 'phone', 'account_number', 'ifsc', 'imps_name', 'bank_name', 'neft_name', 'cash_bank_code', 'cash_location', 'cash_agent_code', 'from_account', 'from_name', 'actcdep')),
+			value TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(type, value)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("creating new identifiers table: %w", err)
+	}
+
+	_, err = db.Exec(`
+		INSERT OR IGNORE INTO identifiers_new (id, party_id, type, value, created_at)
+		SELECT id, party_id, type, value, created_at FROM identifiers
+	`)
+	if err != nil {
+		return fmt.Errorf("copying identifiers data: %w", err)
+	}
+
+	_, err = db.Exec("DROP TABLE identifiers")
+	if err != nil {
+		return fmt.Errorf("dropping old identifiers table: %w", err)
+	}
+
+	_, err = db.Exec("ALTER TABLE identifiers_new RENAME TO identifiers")
+	if err != nil {
+		return fmt.Errorf("renaming identifiers table: %w", err)
+	}
+
+	// Recreate indexes
+	_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_identifiers_value ON identifiers(value)")
+	if err != nil {
+		log.Printf("Migration: Warning - could not create value index: %v", err)
+	}
+	_, err = db.Exec("CREATE INDEX IF NOT EXISTS idx_identifiers_type_value ON identifiers(type, value)")
+	if err != nil {
+		log.Printf("Migration: Warning - could not create type_value index: %v", err)
+	}
+
+	log.Printf("Migration: Updated identifiers table CHECK constraint")
 	return nil
 }
 
@@ -197,7 +260,7 @@ CREATE TABLE IF NOT EXISTS parties (
 CREATE TABLE IF NOT EXISTS identifiers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     party_id INTEGER NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
-    type TEXT NOT NULL CHECK (type IN ('upi_vpa', 'phone', 'account_number', 'ifsc', 'imps_name', 'bank_name', 'neft_name')),
+    type TEXT NOT NULL CHECK (type IN ('upi_vpa', 'phone', 'account_number', 'ifsc', 'imps_name', 'bank_name', 'neft_name', 'cash_bank_code', 'cash_location', 'cash_agent_code', 'from_account', 'from_name', 'actcdep')),
     value TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(type, value)

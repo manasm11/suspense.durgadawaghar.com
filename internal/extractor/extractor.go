@@ -21,6 +21,7 @@ const (
 	TypeCashAgentCode IdentifierType = "cash_agent_code" // Agent code from cash deposits (e.g., DDG000201)
 	TypeFromAccount   IdentifierType = "from_account"    // Masked account from From: field (e.g., XXXX8723)
 	TypeFromName      IdentifierType = "from_name"       // Sender name from From: field
+	TypeActcdep       IdentifierType = "actcdep"         // ACTCDEP from TRTR transactions
 )
 
 // Identifier represents an extracted identifier from a narration
@@ -125,6 +126,10 @@ var (
 	// From pattern: From:XXXX<4digits>:<SENDER NAME>
 	// Example: "From:XXXX8723:ASHWANI KUMAR"
 	fromPattern = regexp.MustCompile(`FROM:([X]{4}\d{4}):([A-Z][A-Z\s]+)`)
+
+	// TRTR/ACTCDEP pattern: TRTR/ACTCDEP/<ref>/<code>
+	// Example: "TRTR/ACTCDEP/512916237776/FIK"
+	trtrActcdepPattern = regexp.MustCompile(`TRTR/ACTCDEP/`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -580,6 +585,18 @@ func Extract(narration string) []Identifier {
 			identifiers = append(identifiers, Identifier{
 				Type:  TypeCashAgentCode,
 				Value: value,
+			})
+		}
+	}
+
+	// Extract TRTR/ACTCDEP identifier
+	if trtrActcdepPattern.MatchString(upperNarration) {
+		key := string(TypeActcdep) + ":ACTCDEP"
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeActcdep,
+				Value: "ACTCDEP",
 			})
 		}
 	}
