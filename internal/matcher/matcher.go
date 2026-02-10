@@ -34,9 +34,11 @@ const (
 	PhoneWeight         = 0.85
 	AccountNumberWeight = 0.80
 	CashAgentCodeWeight = 0.75 // High - agent codes are unique to depositing agencies
+	FromAccountWeight   = 0.70 // Medium-high - last 4 digits have some collision potential
 	CashBankCodeWeight  = 0.60 // Medium - branch codes are less unique
 	IMPSNameWeight      = 0.50 // Medium - names can be truncated/similar
 	NEFTNameWeight      = 0.50 // Medium - same as IMPS, names can be truncated
+	FromNameWeight      = 0.50 // Medium - same as other name types
 	CashLocationWeight  = 0.30 // Low-Medium - many parties from same location
 	BankNameWeight      = 0.20 // Low - many parties use same bank
 )
@@ -208,6 +210,10 @@ func calculateConfidence(matches []MatchedIdentifier) float64 {
 			weight = IMPSNameWeight * 100
 		case string(extractor.TypeNEFTName):
 			weight = NEFTNameWeight * 100
+		case string(extractor.TypeFromAccount):
+			weight = FromAccountWeight * 100
+		case string(extractor.TypeFromName):
+			weight = FromNameWeight * 100
 		case string(extractor.TypeBankName):
 			weight = BankNameWeight * 100
 		default:
@@ -245,8 +251,10 @@ func (m *Matcher) matchByNarration(ctx context.Context, narration string, identi
 	// Build search patterns from extracted identifiers (e.g., IMPS names, NEFT names)
 	var patterns []string
 	for _, id := range identifiers {
-		// Use IMPS names and NEFT names as search patterns
-		if id.Type == extractor.TypeIMPSName || id.Type == extractor.TypeNEFTName {
+		// Use IMPS names, NEFT names, cash identifiers, and from-field names as search patterns
+		if id.Type == extractor.TypeIMPSName || id.Type == extractor.TypeNEFTName ||
+			id.Type == extractor.TypeCashBankCode || id.Type == extractor.TypeCashAgentCode ||
+			id.Type == extractor.TypeFromName {
 			patterns = append(patterns, "%"+id.Value+"%")
 		}
 	}

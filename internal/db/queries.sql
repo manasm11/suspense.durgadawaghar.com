@@ -87,3 +87,8 @@ WHERE amount >= ? AND amount <= ?
   AND bill_date >= ? AND bill_date <= ?
 ORDER BY bill_date DESC, amount DESC
 LIMIT 100;
+
+-- name: GetTransactionByDetails :one
+SELECT * FROM transactions
+WHERE amount = ? AND transaction_date = ? AND narration = ?
+LIMIT 1;

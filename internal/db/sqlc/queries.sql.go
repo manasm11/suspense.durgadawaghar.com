@@ -505,6 +505,35 @@ func (q *Queries) GetRecentTransactionsByPartyID(ctx context.Context, arg GetRec
 	return items, nil
 }
 
+const getTransactionByDetails = `-- name: GetTransactionByDetails :one
+SELECT id, party_id, amount, transaction_date, payment_mode, narration, cash_bank_code, cash_bank_location, created_at FROM transactions
+WHERE amount = ? AND transaction_date = ? AND narration = ?
+LIMIT 1
+`
+
+type GetTransactionByDetailsParams struct {
+	Amount          float64
+	TransactionDate time.Time
+	Narration       sql.NullString
+}
+
+func (q *Queries) GetTransactionByDetails(ctx context.Context, arg GetTransactionByDetailsParams) (Transaction, error) {
+	row := q.db.QueryRowContext(ctx, getTransactionByDetails, arg.Amount, arg.TransactionDate, arg.Narration)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.PartyID,
+		&i.Amount,
+		&i.TransactionDate,
+		&i.PaymentMode,
+		&i.Narration,
+		&i.CashBankCode,
+		&i.CashBankLocation,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTransactionsByPartyID = `-- name: GetTransactionsByPartyID :many
 SELECT id, party_id, amount, transaction_date, payment_mode, narration, cash_bank_code, cash_bank_location, created_at FROM transactions
 WHERE party_id = ?

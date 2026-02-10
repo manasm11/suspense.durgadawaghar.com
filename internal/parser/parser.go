@@ -60,19 +60,20 @@ var (
 	// Payment mode detection patterns
 	// Note: These patterns match anywhere in the narration since bank account info often comes first
 	upiModePattern  = regexp.MustCompile(`(?i)^UPI/|/UPI/|/UPI$|\sUPI/`)
-	impsModePattern = regexp.MustCompile(`(?i)IMPS/|/IMPS/|MMT/IMPS`)
-	neftModePattern = regexp.MustCompile(`(?i)\sNEFT-|^NEFT-`)
+	impsModePattern = regexp.MustCompile(`(?i)IMPS/|/IMPS/|MMT/IMPS|\sIMPS-IN/|^IMPS-IN/`)
+	neftModePattern = regexp.MustCompile(`(?i)\sNEFT-|^NEFT-|\sNEFT_IN:|^NEFT_IN:`)
 	rtgsModePattern = regexp.MustCompile(`(?i)\sRTGS-|^RTGS-`)
 	clgModePattern  = regexp.MustCompile(`(?i)\sCLG/|^CLG/`)
 	infModePattern  = regexp.MustCompile(`(?i)\sINF/|^INF/|^INFT/|/INFT/|\sINFT/`)
-	trfModePattern  = regexp.MustCompile(`(?i)\sTRF/|^TRF/`)
+	trfModePattern  = regexp.MustCompile(`(?i)\sTRF/|^TRF/|\sTRTR/|^TRTR/`)
 	chqModePattern  = regexp.MustCompile(`(?i)Chq\.|Cheque|CHQ`)
 	posModePattern  = regexp.MustCompile(`(?i)FT-MESPOS|MESPOS\s+SET|POS\s+MACHINE`)
 	cashModePattern = regexp.MustCompile(`(?i)^BY\s+CASH|\sBY\s+CASH|CASH\s+DEP|CAM/`)
 
-	// Cash deposit pattern: captures bank code and location with optional state
+	// Cash deposit pattern: captures bank code and location with optional state/district
 	// Example: "BY CASH -733300 TIRWA (UP)" -> code="733300", location="TIRWA (UP)"
-	cashDepositPattern = regexp.MustCompile(`BY\s+CASH\s+-(\d+)\s+([A-Z][A-Za-z]*(?:\s+\([A-Z]{2}\))?)`)
+	// Example: "BY CASH -691900 BAKEWAR (DISTT-ETAWAH)" -> code="691900", location="BAKEWAR (DISTT-ETAWAH)"
+	cashDepositPattern = regexp.MustCompile(`BY\s+CASH\s+-(\d+)\s+([A-Z][A-Za-z]*(?:\s+\([^)]+\))?)`)
 
 	// Invoice reference pattern to ignore: "Ag. DDG...", "Ag. *DDG028429,*DDG028437,...", "Ag. DDGT000180", etc.
 	// Matches everything after "Ag." since it's all invoice reference data
@@ -238,9 +239,10 @@ func isPartyLine(line string) bool {
 	// Should not start with known narration patterns
 	upperLine := strings.ToUpper(line)
 	narrationPrefixes := []string{
-		"UPI/", "NEFT-", "RTGS-", "IMPS/", "MMT/", "CLG/", "INF/", "INFT/", "TRF/",
+		"UPI/", "NEFT-", "NEFT_", "RTGS-", "IMPS/", "IMPS-", "MMT/", "CLG/", "INF/", "INFT/", "TRF/", "TRTR/",
 		"CHQ.", "CHEQUE", "BY CASH", "FT-MESPOS", "BIL/",
 		"AG.", "AG ", // Invoice reference lines (Ag. DDG...) - should not be party lines
+		"FROM:",      // AEPS-style narration (From:XXXX8723:NAME)
 	}
 	for _, prefix := range narrationPrefixes {
 		if strings.HasPrefix(upperLine, prefix) {
@@ -369,6 +371,8 @@ func parsePartyNameLocation(text string) (name, location string) {
 		"RAWATPUR", "NAGAR", "KHANPUR", "KHAR", "RATH",
 		// Additional locations from October 2025 full data
 		"MUNSI", "GAO", "CHAURA", "SUMER", "KHERA",
+		// Additional locations from April 2025 PNB data
+		"LUDHIYANI", "INDERGARH",
 	}
 
 	words := strings.Fields(text)

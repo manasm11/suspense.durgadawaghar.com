@@ -19,6 +19,8 @@ const (
 	TypeCashBankCode  IdentifierType = "cash_bank_code"  // Bank code from cash deposits
 	TypeCashLocation  IdentifierType = "cash_location"   // Location from cash deposits (e.g., TIRWA (UP))
 	TypeCashAgentCode IdentifierType = "cash_agent_code" // Agent code from cash deposits (e.g., DDG000201)
+	TypeFromAccount   IdentifierType = "from_account"    // Masked account from From: field (e.g., XXXX8723)
+	TypeFromName      IdentifierType = "from_name"       // Sender name from From: field
 )
 
 // Identifier represents an extracted identifier from a narration
@@ -98,6 +100,11 @@ var (
 	// Extracts the name after the reference
 	bilInftNamePattern = regexp.MustCompile(`BIL/INFT/[A-Z0-9]+/\s*([A-Z][A-Z\s]+)`)
 
+	// NEFT_IN pattern: NEFT_IN:null//<ref>/<name>
+	// Example: NEFT_IN:null//SBINN52025042334823235/VIJAY MEDICAL STORE Ag. DDG000516
+	// Extracts the name after the reference (stops before Ag. if present)
+	neftInNamePattern = regexp.MustCompile(`NEFT_IN:[^/]*//[A-Z0-9]+/([A-Z][A-Z\s]+?)(?:\s+AG\.|\s*$)`)
+
 	// Cash deposit bank code pattern: BY CASH -<code> <location>
 	// Example: "BY CASH -733300 TIRWA (UP)" -> code="733300"
 	cashBankCodePattern = regexp.MustCompile(`BY\s+CASH\s+-(\d{5,8})`)
@@ -109,9 +116,15 @@ var (
 
 	// Cash deposit agent code pattern: Ag. <code> or similar agent identifiers
 	// Example: "BY CASH -733300 TIRWA (UP) Ag. DDG000201" -> agent="DDG000201"
+	// Example: "From:XXXX8723:ASHWANI KUMAR Ag. *DDG029160," -> agent="DDG029160"
 	// Pattern matches alphanumeric codes that look like agent/agency identifiers
 	// Note: uses uppercase because we match against upperNarration
-	cashAgentCodePattern = regexp.MustCompile(`(?:AG\.?|AGT\.?|AGENCY)\s*([A-Z]{2,4}\d{6,10})`)
+	// The \*? handles optional asterisk prefix before the agent code
+	cashAgentCodePattern = regexp.MustCompile(`(?:AG\.?|AGT\.?|AGENCY)\s*\*?([A-Z]{2,4}\d{6,10})`)
+
+	// From pattern: From:XXXX<4digits>:<SENDER NAME>
+	// Example: "From:XXXX8723:ASHWANI KUMAR"
+	fromPattern = regexp.MustCompile(`FROM:([X]{4}\d{4}):([A-Z][A-Z\s]+)`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -312,6 +325,14 @@ func extractNEFTName(narration string) string {
 
 	// Try BIL/INFT pattern
 	if matches := bilInftNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
+		name := strings.TrimSpace(matches[1])
+		if isValidExtractedName(name) {
+			return name
+		}
+	}
+
+	// Try NEFT_IN pattern
+	if matches := neftInNamePattern.FindStringSubmatch(upperNarration); len(matches) > 1 {
 		name := strings.TrimSpace(matches[1])
 		if isValidExtractedName(name) {
 			return name
@@ -560,6 +581,35 @@ func Extract(narration string) []Identifier {
 				Type:  TypeCashAgentCode,
 				Value: value,
 			})
+		}
+	}
+
+	// Extract From: field data (masked account and sender name)
+	if fromMatches := fromPattern.FindStringSubmatch(upperNarration); len(fromMatches) > 2 {
+		// Extract masked account number (e.g., XXXX8723)
+		maskedAccount := fromMatches[1]
+		key := string(TypeFromAccount) + ":" + maskedAccount
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeFromAccount,
+				Value: maskedAccount,
+			})
+		}
+
+		// Extract sender name (remove trailing " AG" if captured from agent code prefix)
+		senderName := strings.TrimSpace(fromMatches[2])
+		senderName = strings.TrimSuffix(senderName, " AG")
+		senderName = strings.TrimSpace(senderName)
+		if isValidExtractedName(senderName) {
+			key := string(TypeFromName) + ":" + senderName
+			if !seen[key] {
+				seen[key] = true
+				identifiers = append(identifiers, Identifier{
+					Type:  TypeFromName,
+					Value: senderName,
+				})
+			}
 		}
 	}
 

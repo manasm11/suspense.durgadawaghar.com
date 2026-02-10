@@ -4,6 +4,80 @@ import (
 	"testing"
 )
 
+func TestUserScenarioFromPattern(t *testing.T) {
+	narration := "From:XXXX8723:ASHWANI KUMAR Ag. *DDG029160,"
+	ids := Extract(narration)
+	t.Logf("Extracted %d identifiers from: %s", len(ids), narration)
+	for _, id := range ids {
+		t.Logf("  Type: %-15s Value: %s", id.Type, id.Value)
+	}
+
+	// Verify we got the expected identifiers
+	foundFromAccount := false
+	foundFromName := false
+	foundAgentCode := false
+
+	for _, id := range ids {
+		switch id.Type {
+		case TypeFromAccount:
+			if id.Value == "XXXX8723" {
+				foundFromAccount = true
+			}
+		case TypeFromName:
+			if id.Value == "ASHWANI KUMAR" {
+				foundFromName = true
+			}
+		case TypeCashAgentCode:
+			if id.Value == "DDG029160" {
+				foundAgentCode = true
+			}
+		}
+	}
+
+	if !foundFromAccount {
+		t.Error("Expected to find from_account=XXXX8723")
+	}
+	if !foundFromName {
+		t.Error("Expected to find from_name=ASHWANI KUMAR")
+	}
+	if !foundAgentCode {
+		t.Error("Expected to find cash_agent_code=DDG029160")
+	}
+}
+
+func TestFromPatternWithSpacedName(t *testing.T) {
+	// User's exact scenario: R R DRUG CENTRE (spaced name)
+	narration := "From:XXXX2304:R R DRUG CENTRE"
+	ids := Extract(narration)
+	t.Logf("Extracted %d identifiers from: %s", len(ids), narration)
+	for _, id := range ids {
+		t.Logf("  Type: %-15s Value: %s", id.Type, id.Value)
+	}
+
+	foundFromAccount := false
+	foundFromName := false
+
+	for _, id := range ids {
+		switch id.Type {
+		case TypeFromAccount:
+			if id.Value == "XXXX2304" {
+				foundFromAccount = true
+			}
+		case TypeFromName:
+			if id.Value == "R R DRUG CENTRE" {
+				foundFromName = true
+			}
+		}
+	}
+
+	if !foundFromAccount {
+		t.Error("Expected to find from_account=XXXX2304")
+	}
+	if !foundFromName {
+		t.Error("Expected to find from_name=R R DRUG CENTRE")
+	}
+}
+
 func TestExtractUPIVPA(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -381,6 +455,16 @@ func TestExtractNEFTName(t *testing.T) {
 			want:      []string{"SANJIT KUMAR"},
 		},
 		{
+			name:      "NEFT_IN format with agent code",
+			narration: "NEFT_IN:null//SBINN52025042334823235/VIJAY MEDICAL STORE Ag. DDG000516",
+			want:      []string{"VIJAY MEDICAL STORE"},
+		},
+		{
+			name:      "NEFT_IN format without agent code",
+			narration: "NEFT_IN:null//PUNB52025050012345678/SHARMA TRADERS",
+			want:      []string{"SHARMA TRADERS"},
+		},
+		{
 			name:      "Non-NEFT narration (UPI)",
 			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
 			want:      nil,
@@ -577,6 +661,11 @@ func TestExtractCashAgentCode(t *testing.T) {
 			want:      []string{"ABCD1234567890"},
 		},
 		{
+			name:      "Agent code with asterisk prefix",
+			narration: "From:XXXX8723:ASHWANI KUMAR Ag. *DDG029160,",
+			want:      []string{"DDG029160"},
+		},
+		{
 			name:      "Cash deposit without agent code",
 			narration: "BY CASH -123456 KANPUR",
 			want:      nil,
@@ -591,6 +680,114 @@ func TestExtractCashAgentCode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ExtractByType(tt.narration, TypeCashAgentCode)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestExtractFromAccount(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "Standard From pattern",
+			narration: "PNB 0257002100103683 30968.00\nFrom:XXXX8723:ASHWANI KUMAR",
+			want:      []string{"XXXX8723"},
+		},
+		{
+			name:      "From pattern with different account",
+			narration: "From:XXXX1234:RAJESH SHARMA",
+			want:      []string{"XXXX1234"},
+		},
+		{
+			name:      "From pattern lowercase (should match due to uppercase conversion)",
+			narration: "from:XXXX5678:SUNIL KUMAR",
+			want:      []string{"XXXX5678"},
+		},
+		{
+			name:      "From pattern with agent code",
+			narration: "From:XXXX8723:ASHWANI KUMAR Ag. *DDG029160,",
+			want:      []string{"XXXX8723"},
+		},
+		{
+			name:      "No From pattern",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+		{
+			name:      "Invalid From pattern (not enough X)",
+			narration: "From:XXX8723:ASHWANI KUMAR",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeFromAccount)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("ExtractByType()[%d] = %v, want %v", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestExtractFromName(t *testing.T) {
+	tests := []struct {
+		name      string
+		narration string
+		want      []string
+	}{
+		{
+			name:      "Standard From pattern",
+			narration: "PNB 0257002100103683 30968.00\nFrom:XXXX8723:ASHWANI KUMAR",
+			want:      []string{"ASHWANI KUMAR"},
+		},
+		{
+			name:      "From pattern with single name",
+			narration: "From:XXXX1234:RAJESH",
+			want:      []string{"RAJESH"},
+		},
+		{
+			name:      "From pattern with long name",
+			narration: "From:XXXX5678:MOHAMMAD ABDUL RAHMAN",
+			want:      []string{"MOHAMMAD ABDUL RAHMAN"},
+		},
+		{
+			name:      "From pattern with agent code (should strip AG suffix)",
+			narration: "From:XXXX8723:ASHWANI KUMAR Ag. *DDG029160,",
+			want:      []string{"ASHWANI KUMAR"},
+		},
+		{
+			name:      "No From pattern",
+			narration: "UPI/SANDHYA ME/9450852076@YBL/PAYMENT",
+			want:      nil,
+		},
+		{
+			name:      "From pattern with invalid name (starts with number)",
+			narration: "From:XXXX8723:123ABC",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractByType(tt.narration, TypeFromName)
 			if len(got) != len(tt.want) {
 				t.Errorf("ExtractByType() got %d values %v, want %d values %v", len(got), got, len(tt.want), tt.want)
 				return

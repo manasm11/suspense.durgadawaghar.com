@@ -169,6 +169,17 @@ func (h *Handler) ImportConfirm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) error {
+	// Check for duplicate by amount, date, and narration (regardless of party_id)
+	_, err := h.queries.GetTransactionByDetails(ctx, sqlc.GetTransactionByDetailsParams{
+		Amount:          tx.Amount,
+		TransactionDate: tx.Date,
+		Narration:       sql.NullString{String: tx.Narration, Valid: tx.Narration != ""},
+	})
+	if err == nil {
+		// Found existing transaction with same details
+		return errDuplicate
+	}
+
 	// Extract identifiers from narration
 	ids := extractor.Extract(tx.Narration)
 
@@ -211,7 +222,7 @@ func (h *Handler) importTransaction(ctx context.Context, tx parser.Transaction) 
 	}
 
 	// Insert transaction
-	_, err := h.queries.CreateTransaction(ctx, sqlc.CreateTransactionParams{
+	_, err = h.queries.CreateTransaction(ctx, sqlc.CreateTransactionParams{
 		PartyID:          partyID,
 		Amount:           tx.Amount,
 		TransactionDate:  tx.Date,

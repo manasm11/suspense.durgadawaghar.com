@@ -1274,6 +1274,12 @@ func TestExtractCashDepositInfo(t *testing.T) {
 			wantBankLocation: "LUCKNOW (UP)",
 		},
 		{
+			name:             "Cash deposit with district format",
+			narration:        "BY CASH -691900 BAKEWAR (DISTT-ETAWAH)",
+			wantBankCode:     "691900",
+			wantBankLocation: "BAKEWAR (DISTT-ETAWAH)",
+		},
+		{
 			name:             "Non-cash deposit narration",
 			narration:        "UPI/545843195657/UPI/ALOK7860855471@/PUNJAB NATIONAL",
 			wantBankCode:     "",
@@ -1495,5 +1501,182 @@ func TestDetectPaymentMode(t *testing.T) {
 				t.Errorf("detectPaymentMode(%q) = %q, want %q", tt.narration, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseApril2025PNBNarrationFormats(t *testing.T) {
+	// Test PNB receipt book data with various narration formats
+	input := `Apr 15 SIDDHARTH MED STORE PUKHRAYA 6691.00
+PNB 0257002100103683 6691.00
+NEFT_IN:null//IBKLN92025041534618521/SIDDHARTH MEDICAL STOR Ag. DDG000245
+Apr 21 SHIV MED.STORE INDERGAR 25000.00
+PNB 0257002100103683 25000.00
+TRTR/ACTCDEP/511114205852/FIK Ag. DDG000185,DDG000828
+Apr 29 BADAL MED STORE RAATH 50000.00
+PNB 0257002100103683 50000.00
+IMPS-IN/511915717821/9450273448/GYANENDR Ag. *DDG037006,DDG001746`
+
+	transactions := Parse(input, 2025)
+
+	// Expected transactions:
+	// 1. SIDDHARTH MED STORE PUKHRAYA - NEFT
+	// 2. SHIV MED.STORE INDERGAR - TRF (TRTR format)
+	// 3. BADAL MED STORE RAATH - IMPS
+	expectedCount := 3
+	if len(transactions) != expectedCount {
+		t.Errorf("Expected %d transactions, got %d", expectedCount, len(transactions))
+		for i, tx := range transactions {
+			t.Logf("Transaction %d: Date=%v Party='%s' Location='%s' Amount=%.2f Mode=%s Narration='%s'",
+				i+1, tx.Date.Format("Jan 2"), tx.PartyName, tx.Location, tx.Amount, tx.PaymentMode, tx.Narration)
+		}
+	}
+
+	// Verify first transaction - SIDDHARTH MED STORE with NEFT_IN format
+	if len(transactions) >= 1 {
+		tx := transactions[0]
+		if tx.PartyName != "SIDDHARTH MED STORE" {
+			t.Errorf("Transaction 1: Expected party 'SIDDHARTH MED STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "PUKHRAYA" {
+			t.Errorf("Transaction 1: Expected location 'PUKHRAYA', got '%s'", tx.Location)
+		}
+		if tx.Amount != 6691.00 {
+			t.Errorf("Transaction 1: Expected amount 6691.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "NEFT" {
+			t.Errorf("Transaction 1: Expected mode 'NEFT', got '%s'", tx.PaymentMode)
+		}
+		// Narration should not contain DDG reference
+		if contains(tx.Narration, "DDG000245") {
+			t.Errorf("Transaction 1: Narration should not contain DDG ref, got '%s'", tx.Narration)
+		}
+	}
+
+	// Verify second transaction - SHIV MED.STORE with TRTR format
+	if len(transactions) >= 2 {
+		tx := transactions[1]
+		if tx.PartyName != "SHIV MED.STORE" {
+			t.Errorf("Transaction 2: Expected party 'SHIV MED.STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "INDERGAR" {
+			t.Errorf("Transaction 2: Expected location 'INDERGAR', got '%s'", tx.Location)
+		}
+		if tx.Amount != 25000.00 {
+			t.Errorf("Transaction 2: Expected amount 25000.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "TRF" {
+			t.Errorf("Transaction 2: Expected mode 'TRF', got '%s'", tx.PaymentMode)
+		}
+	}
+
+	// Verify third transaction - BADAL MED STORE with IMPS-IN format
+	if len(transactions) >= 3 {
+		tx := transactions[2]
+		if tx.PartyName != "BADAL MED STORE" {
+			t.Errorf("Transaction 3: Expected party 'BADAL MED STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "RAATH" {
+			t.Errorf("Transaction 3: Expected location 'RAATH', got '%s'", tx.Location)
+		}
+		if tx.Amount != 50000.00 {
+			t.Errorf("Transaction 3: Expected amount 50000.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "IMPS" {
+			t.Errorf("Transaction 3: Expected mode 'IMPS', got '%s'", tx.PaymentMode)
+		}
+	}
+}
+
+func TestParseApril2025PNBData(t *testing.T) {
+	// Test PNB receipt book data with cash deposits and AEPS-style transactions
+	input := `Apr 7 RADHA MED STORE LUDHIYANI 49000.00
+PNB 0257002100103683 49000.00
+BY CASH -691900 BAKEWAR (DISTT-ETAWAH) Ag. *DDG017087
+Apr 7 PRATIMA MEDICAL STORE INDERGARH 29590.00
+PNB 0257002100103683 29590.00
+From:XXXX8723:ASHWANI KUMAR Ag. *DDG026494
+Apr 7 PRATIMA MEDICAL STORE INDERGARH 21889.00
+PNB 0257002100103683 21889.00
+From:XXXX8723:ASHWANI KUMAR Ag. *DDG029160,
+Apr 7 PRATIMA MEDICAL STORE INDERGARH 7598.00
+PNB 0257002100103683 7598.00
+From:XXXX8723:ASHWANI KUMAR Ag. *DDG031224
+Apr 8 PNB 0257002100103683 310000.00
+ICICI 192105002017 310000.00
+RTGS-PUNBR52025040810774253-DURGA DAWA GHAR-0257002100103683-PUNB0025700`
+
+	transactions := Parse(input, 2025)
+
+	// Expected transactions:
+	// 1. RADHA MED STORE LUDHIYANI - CASH deposit
+	// 2. PRATIMA MEDICAL STORE INDERGARH - 29590 (AEPS/From format)
+	// 3. PRATIMA MEDICAL STORE INDERGARH - 21889 (AEPS/From format)
+	// 4. PRATIMA MEDICAL STORE INDERGARH - 7598 (AEPS/From format)
+	// 5. PNB 0257002100103683 - RTGS transfer
+	expectedCount := 5
+	if len(transactions) != expectedCount {
+		t.Errorf("Expected %d transactions, got %d", expectedCount, len(transactions))
+		for i, tx := range transactions {
+			t.Logf("Transaction %d: Date=%v Party='%s' Location='%s' Amount=%.2f Mode=%s Narration='%s'",
+				i+1, tx.Date.Format("Jan 2"), tx.PartyName, tx.Location, tx.Amount, tx.PaymentMode, tx.Narration)
+		}
+	}
+
+	// Verify first transaction - RADHA MED STORE with CASH
+	if len(transactions) >= 1 {
+		tx := transactions[0]
+		if tx.PartyName != "RADHA MED STORE" {
+			t.Errorf("Transaction 1: Expected party 'RADHA MED STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "LUDHIYANI" {
+			t.Errorf("Transaction 1: Expected location 'LUDHIYANI', got '%s'", tx.Location)
+		}
+		if tx.Amount != 49000.00 {
+			t.Errorf("Transaction 1: Expected amount 49000.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "CASH" {
+			t.Errorf("Transaction 1: Expected mode 'CASH', got '%s'", tx.PaymentMode)
+		}
+		if tx.CashBankCode != "691900" {
+			t.Errorf("Transaction 1: Expected CashBankCode '691900', got '%s'", tx.CashBankCode)
+		}
+		if tx.CashBankLocation != "BAKEWAR (DISTT-ETAWAH)" {
+			t.Errorf("Transaction 1: Expected CashBankLocation 'BAKEWAR (DISTT-ETAWAH)', got '%s'", tx.CashBankLocation)
+		}
+	}
+
+	// Verify second transaction - PRATIMA MEDICAL STORE with AEPS-style narration
+	if len(transactions) >= 2 {
+		tx := transactions[1]
+		if tx.PartyName != "PRATIMA MEDICAL STORE" {
+			t.Errorf("Transaction 2: Expected party 'PRATIMA MEDICAL STORE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "INDERGARH" {
+			t.Errorf("Transaction 2: Expected location 'INDERGARH', got '%s'", tx.Location)
+		}
+		if tx.Amount != 29590.00 {
+			t.Errorf("Transaction 2: Expected amount 29590.00, got %.2f", tx.Amount)
+		}
+		// Narration should contain the From pattern but not DDG reference
+		if !contains(tx.Narration, "From:XXXX8723:ASHWANI KUMAR") {
+			t.Errorf("Transaction 2: Expected narration to contain 'From:XXXX8723:ASHWANI KUMAR', got '%s'", tx.Narration)
+		}
+		if contains(tx.Narration, "DDG026494") {
+			t.Errorf("Transaction 2: Narration should not contain DDG ref, got '%s'", tx.Narration)
+		}
+	}
+
+	// Verify last transaction - PNB bank transfer with RTGS
+	if len(transactions) >= 5 {
+		tx := transactions[4]
+		if tx.PartyName != "PNB 0257002100103683" {
+			t.Errorf("Transaction 5: Expected party 'PNB 0257002100103683', got '%s'", tx.PartyName)
+		}
+		if tx.Amount != 310000.00 {
+			t.Errorf("Transaction 5: Expected amount 310000.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "RTGS" {
+			t.Errorf("Transaction 5: Expected mode 'RTGS', got '%s'", tx.PaymentMode)
+		}
 	}
 }
