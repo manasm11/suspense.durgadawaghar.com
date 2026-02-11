@@ -1280,6 +1280,12 @@ func TestExtractCashDepositInfo(t *testing.T) {
 			wantBankLocation: "BAKEWAR (DISTT-ETAWAH)",
 		},
 		{
+			name:             "Named party cash deposit with hyphenated location",
+			narration:        "BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD",
+			wantBankCode:     "010010",
+			wantBankLocation: "LUCKNOW-AMINABAD",
+		},
+		{
 			name:             "Non-cash deposit narration",
 			narration:        "UPI/545843195657/UPI/ALOK7860855471@/PUNJAB NATIONAL",
 			wantBankCode:     "",
@@ -1477,6 +1483,11 @@ func TestDetectPaymentMode(t *testing.T) {
 			want:      "CASH",
 		},
 		{
+			name:      "BY named party cash deposit",
+			narration: "BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD",
+			want:      "CASH",
+		},
+		{
 			name:      "CAM cash deposit",
 			narration: "CAM/40791SRY/CASH DEP-OTHER/31-05-25/1582",
 			want:      "CASH",
@@ -1501,6 +1512,41 @@ func TestDetectPaymentMode(t *testing.T) {
 				t.Errorf("detectPaymentMode(%q) = %q, want %q", tt.narration, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseNamedCashDeposit(t *testing.T) {
+	// Test "BY <party_name> -<code> <location>" format
+	input := `May 21 VETERINARY HOUSE LUCKNOW 38390.00
+PNB 0257002100103683 38390.00
+BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD`
+
+	transactions := Parse(input, 2025)
+
+	if len(transactions) != 1 {
+		t.Errorf("Expected 1 transaction, got %d", len(transactions))
+	}
+
+	if len(transactions) > 0 {
+		tx := transactions[0]
+		if tx.PartyName != "VETERINARY HOUSE" {
+			t.Errorf("Expected party name 'VETERINARY HOUSE', got '%s'", tx.PartyName)
+		}
+		if tx.Location != "LUCKNOW" {
+			t.Errorf("Expected location 'LUCKNOW', got '%s'", tx.Location)
+		}
+		if tx.Amount != 38390.00 {
+			t.Errorf("Expected amount 38390.00, got %.2f", tx.Amount)
+		}
+		if tx.PaymentMode != "CASH" {
+			t.Errorf("Expected payment mode 'CASH', got '%s'", tx.PaymentMode)
+		}
+		if tx.CashBankCode != "010010" {
+			t.Errorf("Expected CashBankCode '010010', got '%s'", tx.CashBankCode)
+		}
+		if tx.CashBankLocation != "LUCKNOW-AMINABAD" {
+			t.Errorf("Expected CashBankLocation 'LUCKNOW-AMINABAD', got '%s'", tx.CashBankLocation)
+		}
 	}
 }
 

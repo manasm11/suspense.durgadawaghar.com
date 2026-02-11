@@ -113,7 +113,15 @@ var (
 	// Cash deposit location pattern: BY CASH -<code> <location>
 	// Example: "BY CASH -733300 TIRWA (UP)" -> location="TIRWA (UP)"
 	// Captures location name with optional state code in parentheses
-	cashLocationPattern = regexp.MustCompile(`BY\s+CASH\s+-\d{5,8}\s+([A-Z][A-Za-z]*(?:\s+\([A-Z]{2}\))?)`)
+	cashLocationPattern = regexp.MustCompile(`BY\s+CASH\s+-\d{5,8}\s+([A-Z][A-Za-z-]*(?:\s+\([^)]+\))?)`)
+
+	// Cash deposit bank code fallback for named party format: BY <party> -<code>
+	// Example: "BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD" -> code="010010"
+	cashBankCodeNamedPattern = regexp.MustCompile(`BY\s+[A-Z].+\s-(\d{3,8})`)
+
+	// Cash deposit location fallback for named party format: BY <party> -<code> <location>
+	// Example: "BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD" -> location="LUCKNOW-AMINABAD"
+	cashLocationNamedPattern = regexp.MustCompile(`BY\s+[A-Z].+\s-\d{3,8}\s+([A-Z][A-Za-z-]*(?:\s+\([^)]+\))?)`)
 
 	// Cash deposit agent code pattern: Ag. <code> or similar agent identifiers
 	// Example: "BY CASH -733300 TIRWA (UP) Ag. DDG000201" -> agent="DDG000201"
@@ -559,10 +567,32 @@ func Extract(narration string) []Identifier {
 				Value: value,
 			})
 		}
+	} else if cashCodeMatches := cashBankCodeNamedPattern.FindStringSubmatch(upperNarration); len(cashCodeMatches) > 1 {
+		value := cashCodeMatches[1]
+		key := string(TypeCashBankCode) + ":" + value
+		if !seen[key] {
+			seen[key] = true
+			identifiers = append(identifiers, Identifier{
+				Type:  TypeCashBankCode,
+				Value: value,
+			})
+		}
 	}
 
 	// Extract cash deposit location
 	if locationMatches := cashLocationPattern.FindStringSubmatch(upperNarration); len(locationMatches) > 1 {
+		value := strings.TrimSpace(locationMatches[1])
+		if value != "" {
+			key := string(TypeCashLocation) + ":" + value
+			if !seen[key] {
+				seen[key] = true
+				identifiers = append(identifiers, Identifier{
+					Type:  TypeCashLocation,
+					Value: value,
+				})
+			}
+		}
+	} else if locationMatches := cashLocationNamedPattern.FindStringSubmatch(upperNarration); len(locationMatches) > 1 {
 		value := strings.TrimSpace(locationMatches[1])
 		if value != "" {
 			key := string(TypeCashLocation) + ":" + value

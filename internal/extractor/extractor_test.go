@@ -563,6 +563,11 @@ func TestExtractCashBankCode(t *testing.T) {
 			want:      []string{"1234567"},
 		},
 		{
+			name:      "Named party cash deposit",
+			narration: "BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD",
+			want:      []string{"010010"},
+		},
+		{
 			name:      "Cash deposit without numeric bank code",
 			narration: "BY CASH -KANPUR - BIRHANA ROAD MANISHA",
 			want:      nil,
@@ -615,6 +620,16 @@ func TestExtractCashLocation(t *testing.T) {
 			name:      "Cash deposit with longer location name",
 			narration: "BY CASH -1234567 LUCKNOW (UP)",
 			want:      []string{"LUCKNOW (UP)"},
+		},
+		{
+			name:      "Cash deposit with district format",
+			narration: "BY CASH -691900 BAKEWAR (DISTT-ETAWAH)",
+			want:      []string{"BAKEWAR (DISTT-ETAWAH)"},
+		},
+		{
+			name:      "Named party cash deposit with hyphenated location",
+			narration: "BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD",
+			want:      []string{"LUCKNOW-AMINABAD"},
 		},
 		{
 			name:      "Cash deposit without numeric bank code",

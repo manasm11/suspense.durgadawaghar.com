@@ -17,6 +17,7 @@ type Transaction struct {
 	PaymentMode      string
 	CashBankCode     string // Bank code from cash deposits (e.g., "733300")
 	CashBankLocation string // Bank location from cash deposits (e.g., "TIRWA (UP)")
+	CashAgentCode    string // Agent code from deposits (e.g., "DDG002035")
 }
 
 var (
@@ -68,12 +69,20 @@ var (
 	trfModePattern  = regexp.MustCompile(`(?i)\sTRF/|^TRF/|\sTRTR/|^TRTR/`)
 	chqModePattern  = regexp.MustCompile(`(?i)Chq\.|Cheque|CHQ`)
 	posModePattern  = regexp.MustCompile(`(?i)FT-MESPOS|MESPOS\s+SET|POS\s+MACHINE`)
-	cashModePattern = regexp.MustCompile(`(?i)^BY\s+CASH|\sBY\s+CASH|CASH\s+DEP|CAM/`)
+	cashModePattern = regexp.MustCompile(`(?i)^BY\s+CASH|\sBY\s+CASH|CASH\s+DEP|CAM/|\sBY\s+[A-Z].+\s-\d{3,8}\s|^BY\s+[A-Z].+\s-\d{3,8}\s`)
 
 	// Cash deposit pattern: captures bank code and location with optional state/district
 	// Example: "BY CASH -733300 TIRWA (UP)" -> code="733300", location="TIRWA (UP)"
 	// Example: "BY CASH -691900 BAKEWAR (DISTT-ETAWAH)" -> code="691900", location="BAKEWAR (DISTT-ETAWAH)"
 	cashDepositPattern = regexp.MustCompile(`BY\s+CASH\s+-(\d+)\s+([A-Z][A-Za-z]*(?:\s+\([^)]+\))?)`)
+
+	// Cash deposit with named party pattern: BY <party_name> -<code> <location>
+	// Example: "BY VETERINARY HOUSE -010010 LUCKNOW-AMINABAD" -> code="010010", location="LUCKNOW-AMINABAD"
+	cashDepositNamedPattern = regexp.MustCompile(`BY\s+[A-Z].+\s-(\d{3,8})\s+([A-Z][A-Za-z-]*(?:\s+\([^)]+\))?)`)
+
+	// Agent code pattern: extracts DDG/DDGT-style codes from narration
+	// Must be applied BEFORE invoiceRefPattern strips the Ag. portion
+	agentCodePattern = regexp.MustCompile(`(?i)AG\.?\s*\*?([A-Z]{2,4}\d{6,10})`)
 
 	// Invoice reference pattern to ignore: "Ag. DDG...", "Ag. *DDG028429,*DDG028437,...", "Ag. DDGT000180", etc.
 	// Matches everything after "Ag." since it's all invoice reference data
@@ -422,6 +431,10 @@ func buildNarration(lines []string) string {
 // Example: "BY CASH -733300 TIRWA (UP)" -> "733300", "TIRWA (UP)"
 func extractCashDepositInfo(narration string) (bankCode string, bankLocation string) {
 	matches := cashDepositPattern.FindStringSubmatch(narration)
+	if len(matches) >= 3 {
+		return matches[1], strings.TrimSpace(matches[2])
+	}
+	matches = cashDepositNamedPattern.FindStringSubmatch(narration)
 	if len(matches) >= 3 {
 		return matches[1], strings.TrimSpace(matches[2])
 	}
