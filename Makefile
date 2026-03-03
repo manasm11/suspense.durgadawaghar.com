@@ -1,6 +1,22 @@
-.PHONY: all build run clean generate templ sqlc deps test
+.PHONY: help all build run clean generate templ sqlc deps test
 
-# Default target
+# Default target - show help
+help:
+	@echo "Available targets:"
+	@echo "  all      - Generate code and build (default)"
+	@echo "  deps     - Install Go dependencies and tools"
+	@echo "  templ    - Generate templ files"
+	@echo "  sqlc     - Regenerate sqlc files"
+	@echo "  generate - Generate all code"
+	@echo "  build    - Build the server binary"
+	@echo "  run      - Run the server"
+	@echo "  clean    - Remove build artifacts"
+	@echo "  test     - Run tests"
+	@echo "  fmt      - Format code"
+	@echo "  dev      - Run with hot reload (requires air)"
+	@echo "  init-db  - Initialize SQLite database"
+
+# Build everything
 all: generate build
 
 # Install dependencies
@@ -56,18 +72,3 @@ dev:
 init-db:
 	sqlite3 suspense.db < internal/db/schema.sql
 
-# Help
-help:
-	@echo "Available targets:"
-	@echo "  all      - Generate code and build (default)"
-	@echo "  deps     - Install Go dependencies and tools"
-	@echo "  templ    - Generate templ files"
-	@echo "  sqlc     - Regenerate sqlc files"
-	@echo "  generate - Generate all code"
-	@echo "  build    - Build the server binary"
-	@echo "  run      - Run the server"
-	@echo "  clean    - Remove build artifacts"
-	@echo "  test     - Run tests"
-	@echo "  fmt      - Format code"
-	@echo "  dev      - Run with hot reload (requires air)"
-	@echo "  init-db  - Initialize SQLite database"
