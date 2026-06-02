@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"suspense.durgadawaghar.com/internal/backup"
 	"suspense.durgadawaghar.com/internal/db/sqlc"
 	"suspense.durgadawaghar.com/internal/extractor"
 	"suspense.durgadawaghar.com/internal/matcher"
@@ -22,18 +23,22 @@ var errDuplicate = errors.New("duplicate transaction")
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
-	queries *sqlc.Queries
-	db      *sql.DB
-	matcher *matcher.Matcher
+	queries      *sqlc.Queries
+	db           *sql.DB
+	matcher      *matcher.Matcher
+	dbPath       string
+	backupConfig backup.Config
 }
 
 // NewHandler creates a new Handler instance
-func NewHandler(db *sql.DB) *Handler {
+func NewHandler(db *sql.DB, dbPath string, backupCfg backup.Config) *Handler {
 	queries := sqlc.New(db)
 	return &Handler{
-		queries: queries,
-		db:      db,
-		matcher: matcher.NewMatcher(queries),
+		queries:      queries,
+		db:           db,
+		matcher:      matcher.NewMatcher(queries),
+		dbPath:       dbPath,
+		backupConfig: backupCfg,
 	}
 }
 
@@ -146,6 +151,9 @@ func (h *Handler) ImportConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	transactions := parser.Parse(data, year)
+
+	// Take a backup before import
+	backup.Run(h.dbPath, h.backupConfig)
 
 	ctx := r.Context()
 	imported := 0
@@ -316,6 +324,9 @@ func (h *Handler) ImportSaleBillsConfirm(w http.ResponseWriter, r *http.Request)
 	}
 
 	bills := parser.ParseSaleBills(data, year)
+
+	// Take a backup before import
+	backup.Run(h.dbPath, h.backupConfig)
 
 	ctx := r.Context()
 	imported := 0

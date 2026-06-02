@@ -9,6 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"suspense.durgadawaghar.com/internal/backup"
 	"suspense.durgadawaghar.com/internal/handler"
 )
 
@@ -24,8 +25,9 @@ func main() {
 	}
 	defer db.Close()
 
-	// Create handler
-	h := handler.NewHandler(db)
+	// Create handler with backup config
+	backupCfg := backup.ConfigFromEnv()
+	h := handler.NewHandler(db, *dbPath, backupCfg)
 
 	// Setup routes
 	mux := http.NewServeMux()
