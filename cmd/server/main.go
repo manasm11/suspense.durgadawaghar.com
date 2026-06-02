@@ -139,6 +139,11 @@ func migrateDB(db *sql.DB) error {
 		return fmt.Errorf("migrating identifiers table: %w", err)
 	}
 
+	// Add cash_bank_code and cash_bank_location columns if missing
+	if err := migrateCashColumns(db); err != nil {
+		return fmt.Errorf("migrating cash columns: %w", err)
+	}
+
 	// Migrate sale_bills table
 	if err := migrateSaleBillsTable(db); err != nil {
 		return fmt.Errorf("migrating sale_bills table: %w", err)
@@ -202,6 +207,33 @@ func migrateIdentifiersTable(db *sql.DB) error {
 	}
 
 	log.Printf("Migration: Updated identifiers table CHECK constraint")
+	return nil
+}
+
+func migrateCashColumns(db *sql.DB) error {
+	// Check if cash_bank_code column exists
+	_, err := db.Exec("SELECT cash_bank_code FROM transactions LIMIT 1")
+	if err != nil {
+		// Column doesn't exist, add it
+		log.Printf("Migration: Adding cash_bank_code column to transactions table...")
+		_, err = db.Exec("ALTER TABLE transactions ADD COLUMN cash_bank_code TEXT")
+		if err != nil {
+			return fmt.Errorf("adding cash_bank_code column: %w", err)
+		}
+		log.Printf("Migration: Added cash_bank_code column")
+	}
+
+	// Check if cash_bank_location column exists
+	_, err = db.Exec("SELECT cash_bank_location FROM transactions LIMIT 1")
+	if err != nil {
+		log.Printf("Migration: Adding cash_bank_location column to transactions table...")
+		_, err = db.Exec("ALTER TABLE transactions ADD COLUMN cash_bank_location TEXT")
+		if err != nil {
+			return fmt.Errorf("adding cash_bank_location column: %w", err)
+		}
+		log.Printf("Migration: Added cash_bank_location column")
+	}
+
 	return nil
 }
 
@@ -274,6 +306,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     transaction_date DATE NOT NULL,
     payment_mode TEXT,
     narration TEXT,
+    cash_bank_code TEXT,
+    cash_bank_location TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
