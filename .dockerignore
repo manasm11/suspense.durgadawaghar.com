@@ -1,0 +1,12 @@
+data/
+.git/
+tmp/
+bin/
+suspense
+suspense.db
+*.exe
+*_templ.go
+.idea/
+.vscode/
+caddy
+download
