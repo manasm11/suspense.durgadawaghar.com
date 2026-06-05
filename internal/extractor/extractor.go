@@ -137,7 +137,8 @@ var (
 
 	// TRTR/ACTCDEP pattern: TRTR/ACTCDEP/<ref>/<code>
 	// Example: "TRTR/ACTCDEP/512916237776/FIK"
-	trtrActcdepPattern = regexp.MustCompile(`TRTR/ACTCDEP/`)
+	trtrActcdepPattern      = regexp.MustCompile(`TRTR/ACTCDEP/`)
+	trtrActcdepValuePattern = regexp.MustCompile(`TRTR/ACTCDEP/\d+/([A-Z0-9]+)`)
 )
 
 // bankNormalization maps truncated bank names to full names
@@ -621,12 +622,16 @@ func Extract(narration string) []Identifier {
 
 	// Extract TRTR/ACTCDEP identifier
 	if trtrActcdepPattern.MatchString(upperNarration) {
-		key := string(TypeActcdep) + ":ACTCDEP"
+		value := "ACTCDEP"
+		if m := trtrActcdepValuePattern.FindStringSubmatch(upperNarration); len(m) > 1 {
+			value = m[1]
+		}
+		key := string(TypeActcdep) + ":" + value
 		if !seen[key] {
 			seen[key] = true
 			identifiers = append(identifiers, Identifier{
 				Type:  TypeActcdep,
-				Value: "ACTCDEP",
+				Value: value,
 			})
 		}
 	}

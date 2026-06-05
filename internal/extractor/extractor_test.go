@@ -771,12 +771,12 @@ func TestExtractActcdep(t *testing.T) {
 		{
 			name:      "TRTR/ACTCDEP transaction",
 			narration: "TRTR/ACTCDEP/512916237776/FIK",
-			want:      []string{"ACTCDEP"},
+			want:      []string{"FIK"},
 		},
 		{
 			name:      "TRTR/ACTCDEP with different ref",
 			narration: "TRTR/ACTCDEP/999999999999/ABC",
-			want:      []string{"ACTCDEP"},
+			want:      []string{"ABC"},
 		},
 		{
 			name:      "Non-TRTR narration (UPI)",
