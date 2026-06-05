@@ -105,11 +105,36 @@ var (
 	}
 )
 
+// finalizeBlock assigns narration and payment mode to all transactions in a block,
+// then appends them to the results slice.
+func finalizeBlock(currentBlock []*Transaction, narrationLines []string) []Transaction {
+	if len(currentBlock) == 0 {
+		return nil
+	}
+	narration := buildNarration(narrationLines)
+	paymentMode := detectPaymentMode(narration)
+	var cashBankCode, cashBankLocation string
+	if paymentMode == "CASH" {
+		cashBankCode, cashBankLocation = extractCashDepositInfo(narration)
+	}
+	var out []Transaction
+	for _, tx := range currentBlock {
+		tx.Narration = narration
+		tx.PaymentMode = paymentMode
+		if paymentMode == "CASH" {
+			tx.CashBankCode = cashBankCode
+			tx.CashBankLocation = cashBankLocation
+		}
+		out = append(out, *tx)
+	}
+	return out
+}
+
 // Parse parses receipt book text and returns a slice of transactions
 func Parse(text string, year int) []Transaction {
 	lines := strings.Split(text, "\n")
 	var transactions []Transaction
-	var currentTx *Transaction
+	var currentBlock []*Transaction
 	var narrationLines []string
 	var lastDate time.Time
 
@@ -123,27 +148,21 @@ func Parse(text string, year int) []Transaction {
 
 		// Check if this is a new transaction (starts with date)
 		if match := datePattern.FindStringSubmatch(line); match != nil {
-			// Save previous transaction if exists
-			if currentTx != nil {
-				currentTx.Narration = buildNarration(narrationLines)
-				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
-				if currentTx.PaymentMode == "CASH" {
-					currentTx.CashBankCode, currentTx.CashBankLocation = extractCashDepositInfo(currentTx.Narration)
-				}
-				transactions = append(transactions, *currentTx)
-			}
+			// Finalize previous block
+			transactions = append(transactions, finalizeBlock(currentBlock, narrationLines)...)
 
 			// Parse new transaction
-			currentTx = parseFirstLine(line, match, year)
-			lastDate = currentTx.Date
+			tx := parseFirstLine(line, match, year)
+			lastDate = tx.Date
 			narrationLines = nil
+			currentBlock = nil
 
 			// Check if party name is SUSPENSE A/C
-			if strings.Contains(strings.ToUpper(currentTx.PartyName), "SUSPENSE A/C") {
-				currentTx = nil
+			if strings.Contains(strings.ToUpper(tx.PartyName), "SUSPENSE A/C") {
 				continue
 			}
-		} else if currentTx != nil {
+			currentBlock = append(currentBlock, tx)
+		} else if len(currentBlock) > 0 {
 			// Check if this is a bank account line (should be added to narration)
 			if bankAccountPattern.MatchString(line) {
 				cleanLine := invoiceRefPattern.ReplaceAllString(line, "")
@@ -156,23 +175,14 @@ func Parse(text string, year int) []Transaction {
 
 			// Check if this looks like a party line (has amount at end, contains text)
 			if isPartyLine(line) {
-				// Save current transaction
-				currentTx.Narration = buildNarration(narrationLines)
-				currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
-				if currentTx.PaymentMode == "CASH" {
-					currentTx.CashBankCode, currentTx.CashBankLocation = extractCashDepositInfo(currentTx.Narration)
-				}
-				transactions = append(transactions, *currentTx)
-
-				// Create new transaction with inherited date
-				currentTx = parsePartyLine(line, lastDate)
-				narrationLines = nil
+				// Buffer the new party in the current block
+				tx := parsePartyLine(line, lastDate)
 
 				// Check if party name is SUSPENSE A/C
-				if strings.Contains(strings.ToUpper(currentTx.PartyName), "SUSPENSE A/C") {
-					currentTx = nil
+				if strings.Contains(strings.ToUpper(tx.PartyName), "SUSPENSE A/C") {
 					continue
 				}
+				currentBlock = append(currentBlock, tx)
 				continue
 			}
 
@@ -186,15 +196,8 @@ func Parse(text string, year int) []Transaction {
 		}
 	}
 
-	// Don't forget the last transaction
-	if currentTx != nil {
-		currentTx.Narration = buildNarration(narrationLines)
-		currentTx.PaymentMode = detectPaymentMode(currentTx.Narration)
-		if currentTx.PaymentMode == "CASH" {
-			currentTx.CashBankCode, currentTx.CashBankLocation = extractCashDepositInfo(currentTx.Narration)
-		}
-		transactions = append(transactions, *currentTx)
-	}
+	// Don't forget the last block
+	transactions = append(transactions, finalizeBlock(currentBlock, narrationLines)...)
 
 	return transactions
 }

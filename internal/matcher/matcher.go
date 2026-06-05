@@ -59,21 +59,27 @@ func (m *Matcher) Match(ctx context.Context, narration string) ([]MatchResult, e
 	// Extract identifiers from the narration
 	identifiers := extractor.Extract(narration)
 
-	var matches []sqlc.FindPartiesByIdentifierValuesRow
+	var matches []sqlc.FindPartiesByTypeAndValuesRow
 
 	// Only try identifier matching if we have identifiers
 	if len(identifiers) > 0 {
-		// Get unique values for database query
-		values := make([]string, len(identifiers))
-		for i, id := range identifiers {
-			values[i] = id.Value
+		// Group identifiers by type to query per type (prevents cross-type false positives)
+		typeValues := make(map[string][]string)
+		for _, id := range identifiers {
+			t := string(id.Type)
+			typeValues[t] = append(typeValues[t], id.Value)
 		}
 
-		// Query database for matching parties
-		var err error
-		matches, err = m.queries.FindPartiesByIdentifierValues(ctx, values)
-		if err != nil {
-			return nil, err
+		// Query database for matching parties per identifier type
+		for idType, values := range typeValues {
+			rows, err := m.queries.FindPartiesByTypeAndValues(ctx, sqlc.FindPartiesByTypeAndValuesParams{
+				Type:   idType,
+				Values: values,
+			})
+			if err != nil {
+				return nil, err
+			}
+			matches = append(matches, rows...)
 		}
 	}
 
@@ -163,7 +169,9 @@ func (m *Matcher) Match(ctx context.Context, narration string) ([]MatchResult, e
 		// Apply history boost: 1.0 + log10(tx_count) * 0.1
 		if totalTxCount > 0 {
 			historyBoost := 1.0 + math.Log10(float64(totalTxCount))*0.1
-			result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			boosted := result.Confidence * historyBoost
+			maxBoost := result.Confidence + 15.0 // cap at +15 points
+			result.Confidence = math.Min(math.Min(boosted, maxBoost), 100.0)
 		}
 
 		results = append(results, *result)
@@ -177,51 +185,62 @@ func (m *Matcher) Match(ctx context.Context, narration string) ([]MatchResult, e
 	return results, nil
 }
 
+// weightForType returns the confidence weight for an identifier type
+func weightForType(matchType string) float64 {
+	switch matchType {
+	case string(extractor.TypeUPIVPA):
+		return UPIVPAWeight
+	case string(extractor.TypePhone):
+		return PhoneWeight
+	case string(extractor.TypeAccountNumber):
+		return AccountNumberWeight
+	case string(extractor.TypeCashAgentCode):
+		return CashAgentCodeWeight
+	case string(extractor.TypeFromAccount):
+		return FromAccountWeight
+	case string(extractor.TypeCashBankCode):
+		return CashBankCodeWeight
+	case string(extractor.TypeIMPSName):
+		return IMPSNameWeight
+	case string(extractor.TypeNEFTName):
+		return NEFTNameWeight
+	case string(extractor.TypeFromName):
+		return FromNameWeight
+	case string(extractor.TypeCashLocation):
+		return CashLocationWeight
+	case string(extractor.TypeBankName):
+		return BankNameWeight
+	case string(extractor.TypeActcdep):
+		return ActcdepWeight
+	default:
+		return 0.50
+	}
+}
+
 func calculateConfidence(matches []MatchedIdentifier) float64 {
 	if len(matches) == 0 {
 		return 0
 	}
 
+	// Sort by descending weight so highest-confidence identifier is processed first
+	sorted := make([]MatchedIdentifier, len(matches))
+	copy(sorted, matches)
+	sort.Slice(sorted, func(i, j int) bool {
+		return weightForType(sorted[i].Type) > weightForType(sorted[j].Type)
+	})
+
 	// Use cumulative scoring for multiple matches
 	var confidence float64 = 0
 	matchTypes := make(map[string]bool)
 
-	for _, match := range matches {
+	for _, match := range sorted {
 		// Only count each type once
 		if matchTypes[match.Type] {
 			continue
 		}
 		matchTypes[match.Type] = true
 
-		var weight float64
-		switch match.Type {
-		case string(extractor.TypeUPIVPA):
-			weight = UPIVPAWeight * 100
-		case string(extractor.TypePhone):
-			weight = PhoneWeight * 100
-		case string(extractor.TypeAccountNumber):
-			weight = AccountNumberWeight * 100
-		case string(extractor.TypeCashAgentCode):
-			weight = CashAgentCodeWeight * 100
-		case string(extractor.TypeCashBankCode):
-			weight = CashBankCodeWeight * 100
-		case string(extractor.TypeCashLocation):
-			weight = CashLocationWeight * 100
-		case string(extractor.TypeIMPSName):
-			weight = IMPSNameWeight * 100
-		case string(extractor.TypeNEFTName):
-			weight = NEFTNameWeight * 100
-		case string(extractor.TypeFromAccount):
-			weight = FromAccountWeight * 100
-		case string(extractor.TypeFromName):
-			weight = FromNameWeight * 100
-		case string(extractor.TypeBankName):
-			weight = BankNameWeight * 100
-		case string(extractor.TypeActcdep):
-			weight = ActcdepWeight * 100
-		default:
-			weight = 50 // Unknown type, moderate confidence
-		}
+		weight := weightForType(match.Type) * 100
 
 		// Cumulative scoring: each additional match adds diminishing value
 		if confidence == 0 {
@@ -369,7 +388,9 @@ func (m *Matcher) matchByNarration(ctx context.Context, narration string, identi
 		// Apply history boost
 		if totalTxCount > 0 {
 			historyBoost := 1.0 + math.Log10(float64(totalTxCount))*0.1
-			result.Confidence = math.Min(result.Confidence*historyBoost, 100.0)
+			boosted := result.Confidence * historyBoost
+			maxBoost := result.Confidence + 15.0 // cap at +15 points
+			result.Confidence = math.Min(math.Min(boosted, maxBoost), 100.0)
 		}
 
 		results = append(results, *result)

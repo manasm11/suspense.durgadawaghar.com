@@ -88,6 +88,12 @@ WHERE amount >= ? AND amount <= ?
 ORDER BY bill_date DESC, amount DESC
 LIMIT 100;
 
+-- name: FindPartiesByTypeAndValues :many
+SELECT DISTINCT p.*, i.type as match_type, i.value as match_value
+FROM parties p
+JOIN identifiers i ON p.id = i.party_id
+WHERE i.type = ? AND i.value IN (sqlc.slice('values'));
+
 -- name: GetTransactionByDetails :one
 SELECT * FROM transactions
 WHERE amount = ? AND transaction_date = ? AND narration = ?

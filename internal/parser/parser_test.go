@@ -286,7 +286,7 @@ SUB TOTAL 73494.00 73494.00
 
 	// Verify specific transactions
 	// Note: For multi-party transactions (NIDHI + PANKAJ), the bank account and
-	// narration lines go to the last party (PANKAJ), so NIDHI has empty narration
+	// narration lines are shared across all parties in the block
 	expectedTxs := []struct {
 		partyName   string
 		amount      float64
@@ -295,7 +295,7 @@ SUB TOTAL 73494.00 73494.00
 		{"UPMANYU TRADERS BIRHANA", 11145.00, "UPI"},
 		{"AMIT MED STORE", 1440.00, "UPI"},
 		{"CASH", 384000.00, "CASH"},
-		{"NIDHI MEDICAL STORE", 5361.00, "OTHER"}, // Empty narration (bank lines go to PANKAJ)
+		{"NIDHI MEDICAL STORE", 5361.00, "UPI"}, // Narration shared across all parties in block
 		{"PANKAJ MEDICAL STOERE KANPUR", 3780.00, "UPI"},
 		{"SHRI RAM MEDICAL STORE", 17183.00, "CHEQUE"},
 	}
